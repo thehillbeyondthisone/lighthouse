@@ -13,7 +13,9 @@ import { DEPTH_FORMAT } from './engine/render/SceneRenderer.js';
 import { installDebugViews } from './core/DebugViews.js';
 
 import { Atmosphere, SUN_ILLUMINANCE } from './sky/Atmosphere.js';
-import { Sky, sunDirectionFromTime } from './sky/Sky.js';
+import { Sky } from './sky/Sky.js';
+import { Setting } from './sky/Setting.js';
+import { StyleDirector } from './style/StyleDirector.js';
 import { Clouds } from './sky/Clouds.js';
 import { SkyProClouds } from './sky/SkyProClouds.js';
 import { Environment } from './sky/Environment.js';
@@ -67,6 +69,7 @@ import { SoundScape } from './audio/SoundScape.js';
 import { updateCameraVelocity, useStaticVelocity } from './post/CameraVelocity.js';
 
 const _up = new Vector3( 0, 1, 0 );
+const _sun = new Vector3(), _moon = new Vector3(), _key = new Vector3();
 
 export class App {
 
@@ -82,6 +85,11 @@ export class App {
 		this.qs = new URLSearchParams( location.search );
 		// ?syncPipelines: compile pipelines synchronously (software rendering, tools/shots)
 		if ( this.qs.has( 'syncPipelines' ) ) GPU.syncPipelines = true;
+		// where and when (src/sky/Setting.js): ?setting=flannan puts the sky over the Flannan Isles on
+		// 15 December 1900 (a real sun and moon); the default is Tidewater's tropical sky
+		this.setting = new Setting( this.qs.get( 'setting' ) || 'tidewater' );
+		if ( this.setting.date ) this.settings.timeOfDay = 12.4; // a winter noon: the sun at 8°
+		this.moonLight = 1; // moonlight relative to a full moon overhead (updateSun)
 
 	}
 
@@ -336,6 +344,9 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		G.exposure.value = this.settings.exposure;
 		if ( qs.has( 'scale' ) ) this.settings.renderScale = Number( qs.get( 'scale' ) ) || 1;
 		this.setRenderScale( this.settings.renderScale );
+		// the Style Lab (src/style, docs/PLAN.md §4): ?style=poster | albumen | cyanotype
+		this.style = new StyleDirector( this );
+		this.style.set( qs.get( 'style' ) || 'photoreal' );
 
 		// ---------------------------------------------------------------- audio
 		// recorded field recordings (public/audio, credits in public/audio/CREDITS.md); ?noAudio turns it off
@@ -442,19 +453,36 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 	updateSun() {
 
 		const s = this.settings;
-		const dir = sunDirectionFromTime( s.timeOfDay ).applyAxisAngle( _up, MathUtils.degToRad( s.sunAzimuth || 0 ) );
+		// the setting's sun and moon for this time of day (src/sky/Setting.js), turned by the azimuth option
+		const sky = this.setting.update( s.timeOfDay );
+		const turn = MathUtils.degToRad( s.sunAzimuth || 0 );
+		const dir = _sun.copy( sky.sun ).applyAxisAngle( _up, turn );
 		// the sky is always scattered sunlight, even with the sun below the horizon (twilight)
 		this.atmosphere.sunDir.value.copy( dir );
 		// below the horizon the moon takes over as the key light
 		const night = MathUtils.smoothstep( - dir.y, 0.02, 0.18 );
 		G.night.value = night;
 		this.sky.starIntensity.value = night;
-		const moon = new Vector3( - dir.x, Math.abs( dir.y ) * 0.8 + 0.25, - dir.z ).normalize();
+		const moon = _moon.copy( sky.moon ).applyAxisAngle( _up, turn );
 		this.sky.moonDir.value.copy( moon );
+		// a dated sky has a real moon: its phase shows, and it is not always up (moonless nights are
+		// nearly dark; a trace of starlight and airglow remains)
+		this.sky.moonShade.value = sky.dated ? 1 : 0;
+		const moonUp = sky.dated ? MathUtils.smoothstep( moon.y, - 0.03, 0.12 ) : 1;
+		this.sky.moonLight.value = sky.dated ? sky.moonIllumination * moonUp : 1;
+		this.moonLight = sky.dated ? Math.max( 0.06, sky.moonIllumination * moonUp ) : 1;
 
 		// key light: the sun until it is well below the horizon (it gives no direct light in
-		// twilight anyway), then the moon
-		const light = dir.y > - 0.07 ? dir : moon;
+		// twilight anyway), then the moon (kept a little above the horizon while it is down: its
+		// light is almost nothing then, but shadows from below the ground would be wrong)
+		let light = dir;
+		if ( dir.y <= - 0.07 ) {
+
+			light = moon;
+			if ( sky.dated && moon.y < 0.12 ) light = _key.set( moon.x, 0, moon.z ).normalize().multiplyScalar( Math.sqrt( 1 - 0.12 * 0.12 ) ).setY( 0.12 );
+
+		}
+
 		G.sunDir.value.copy( light );
 
 	}
@@ -469,10 +497,10 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		const horizonFade = MathUtils.smoothstep( sunTrue.y, - 0.03, 0.02 );
 		let c;
 		if ( sunUp ) c = new Color( T[ 0 ], T[ 1 ], T[ 2 ] ).multiplyScalar( SUN_ILLUMINANCE * horizonFade );
-		else c = new Color( 0.6, 0.7, 1.0 ).multiplyScalar( 0.12 * G.night.value );
+		else c = new Color( 0.6, 0.7, 1.0 ).multiplyScalar( 0.12 * G.night.value * this.moonLight );
 		G.sunColor.value.copy( c );
 		const irr = a.skyIrradiance;
-		const nightAmb = 0.012 * G.night.value;
+		const nightAmb = 0.012 * G.night.value * ( 0.35 + 0.65 * this.moonLight );
 		G.skyIrradiance.value.setRGB( irr[ 0 ] + nightAmb * 0.6, irr[ 1 ] + nightAmb * 0.7, irr[ 2 ] + nightAmb );
 		G.horizonColor.value.setRGB( a.horizon[ 0 ], a.horizon[ 1 ], a.horizon[ 2 ] );
 
@@ -687,12 +715,14 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		// the post chain sets the TAAU jitter + internal size and writes the camera into the frame
 		// uniforms (setFrameCamera); shadows then render with this frame's sun and camera
+		this.style.update();
 		this.post.beginFrame();
 		this.underwater.updateCamera( this.camera );
 		this.shadows.render( this.scene, this.engine.meshRenderer, this.shadows.update( this.camera, G.sunDir.value ) );
 		this.sceneRenderer.render();
 		if ( this.post.flare ) this.post.flare.kernel.dispatch( 1 );
 		this.post.render();
+		this.style.afterRender();
 		this.post.endFrame();
 		GPU.submit();
 		this.profiler.update( dt );

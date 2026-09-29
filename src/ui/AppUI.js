@@ -2,6 +2,8 @@ import * as THREE from '../engine/index.js';
 import { UI } from './UI.js';
 import { G } from '../core/Globals.js';
 import { GroundBounce } from '../materials/GroundBounce.js';
+import { STYLES, STYLE_NAMES } from '../style/Styles.js';
+import { SETTINGS } from '../sky/Setting.js';
 
 // Binds the Tidewater UI (panel + HUD) to the running app.
 const SEA = {
@@ -220,6 +222,31 @@ export class AppUI {
 		post.addSlider( { label: 'Vignette', object: s, key: 'vignette', min: 0, max: 1, step: 0.01, onChange: ( v ) => { P.vignette.value = v; } } );
 		post.addSlider( { label: 'Film grain', object: s, key: 'grain', min: 0, max: 0.06, step: 0.001, onChange: ( v ) => { P.grain.value = v; } } );
 
+		// ---------------------------------------------------------------- Style (the Style Lab, docs/PLAN.md §4)
+		if ( app.style ) {
+
+			const styleTab = ui.addTab( 'style', 'Style', 'palette' );
+			const look = styleTab.addFolder( 'Look', { icon: 'palette' } );
+			s.style = app.style.name;
+			look.addSelect( { label: 'Style', object: s, key: 'style', tooltip: 'Complete style conversions: photoreal, Poster (ramped fog, painted sky, banded light), and 1900 photographic prints.', options: STYLE_NAMES.map( ( k ) => ( { label: STYLES[ k ].label, value: k } ) ), onChange: ( v ) => app.style.set( v ) } );
+			const where = styleTab.addFolder( 'Setting', { icon: 'moon' } );
+			s.setting = app.setting.key;
+			where.addSelect( { label: 'Place and date', object: s, key: 'setting', tooltip: 'The sky above the island: Tidewater\'s tropics, or the Flannan Isles from 15 December 1900 (the real sun and moon for the date).', options: Object.keys( SETTINGS ).map( ( k ) => ( { label: SETTINGS[ k ].label, value: k } ) ), onChange: ( v ) => {
+
+				app.setting.set( v );
+				day.setVisible( !! app.setting.date );
+
+			} } );
+			s.day = app.setting.dayOffset;
+			const day = where.addSlider( { label: 'Day', object: s, key: 'day', min: 0, max: 60, step: 1, format: ( v ) => {
+
+				const d = app.setting.date ? new Date( Date.parse( app.setting.date ) + v * 86400000 ) : null;
+				return d ? d.toLocaleDateString( 'en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' } ) : `${ v }`;
+
+			}, tooltip: 'Days after the setting\'s date: the sun climbs and the moon waxes and wanes.', onChange: ( v ) => { app.setting.dayOffset = v; } } ).setVisible( !! app.setting.date );
+
+		}
+
 		// ---------------------------------------------------------------- Performance
 		const perf = ui.addTab( 'performance', 'Performance', 'performance' );
 		const live = perf.addFolder( 'Live', { icon: 'gauge' } );
@@ -242,6 +269,16 @@ export class AppUI {
 		quality.addToggle( { label: 'Water reflections', object: s, key: 'ssr', tooltip: 'Screen-space reflections of the pier, boats and hills on the water.', onChange: ( v ) => { app.waterMaterial.params.ssr.value = v ? 1 : 0; } } );
 
 		this._t = 0;
+
+	}
+
+	// a style sets its own grade (src/style/StyleDirector.js): show its values on the Effects tab
+	onStyleChanged( name ) {
+
+		const P = this.app.post.params;
+		for ( const k of [ 'saturation', 'contrast', 'vignette', 'grain', 'bloom', 'sharpen' ] ) if ( k in this.s ) this.s[ k ] = P[ k ].value;
+		this.s.style = name;
+		this.ui.refresh();
 
 	}
 

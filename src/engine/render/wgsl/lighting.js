@@ -377,6 +377,23 @@ fn studioEnvDiffuse( N: vec3f ) -> vec3f {
 	return mix( vec3f( 0.05, 0.055, 0.06 ), vec3f( 0.3, 0.31, 0.33 ), N.y * 0.5 + 0.5 ) * frame.envIntensity;
 }
 
+// Style Lab (src/style/StyleDirector.js, frame.style*): the key light in a few soft bands. The
+// physical light's visibility (N.L times what shadows, clouds and hills left of it, relative to the
+// unshadowed light) is rounded to frame.styleLight.x levels with soft steps (y: step width in
+// levels), after a wrap that lifts the terminator (z); the result lights the surface with the sun
+// colour tinted toward the colour script's key-light hue.
+fn styleBandedLight( irradiance: vec3f ) -> vec3f {
+	let vis = sat( luminance( irradiance ) / max( luminance( frame.sunColor ), 1e-6 ) );
+	let w = frame.styleLight.z;
+	let v = select( 0.0, sat( ( vis + w ) / ( 1.0 + w ) ), vis > 1e-4 );
+	let bands = max( frame.styleLight.x, 1.0 );
+	let s = clamp( frame.styleLight.y, 1e-3, 0.5 );
+	let y = v * bands;
+	let q = ( floor( y ) + smoothstep( 0.5 - s, 0.5 + s, fract( y ) ) ) / bands;
+	let key = mix( frame.sunColor, luminance( frame.sunColor ) * frame.styleSunTint.rgb, frame.styleSunTint.w );
+	return mix( irradiance, q * key, frame.styleMix.z );
+}
+
 fn shadeSurface( s: Surface, P: vec3f, V: vec3f, pixel: vec2f ) -> vec3f {
 	let N = s.normal;
 	let rough = clamp( s.roughness, 0.03, 1.0 );
@@ -419,9 +436,16 @@ fn shadeSurface( s: Surface, P: vec3f, V: vec3f, pixel: vec2f ) -> vec3f {
 		lightColor *= shadow;
 	}
 #endif
-	let irradiance = dotNL * lightColor;
+	var irradiance = dotNL * lightColor;
+	var specScale = 1.0;
+#if !STUDIO_LIGHTING
+	if ( frame.styleMix.z > 0.0 ) {
+		irradiance = styleBandedLight( irradiance );
+		specScale = mix( 1.0, frame.styleLight.w, frame.styleMix.z );
+	}
+#endif
 	acc.directDiffuse += irradiance * diffuseColor * INV_PI;
-	acc.directSpecular += irradiance * BRDF_GGX( L, V, N, specF0, specF90, rough );
+	acc.directSpecular += irradiance * BRDF_GGX( L, V, N, specF0, specF90, rough ) * specScale;
 #if SHEEN
 	acc.directSpecular += irradiance * BRDF_Sheen( L, V, N, s.sheenColor, max( s.sheenRoughness, 0.07 ) );
 #endif
@@ -473,6 +497,14 @@ fn shadeSurface( s: Surface, P: vec3f, V: vec3f, pixel: vec2f ) -> vec3f {
 #endif
 	acc.indirectDiffuse *= amb;
 	acc.indirectSpecular *= amb;
+#if !STUDIO_LIGHTING
+	// Style Lab: shadows take the colour script's hue (a hue multiplier on the indirect light)
+	if ( frame.styleMix.z > 0.0 ) {
+		let tint = mix( vec3f( 1.0 ), frame.styleShadowTint.rgb, frame.styleShadowTint.w * frame.styleMix.z );
+		acc.indirectDiffuse *= tint;
+		acc.indirectSpecular *= tint;
+	}
+#endif
 
 	var color = acc.directDiffuse + acc.directSpecular + acc.indirectDiffuse + acc.indirectSpecular;
 #if SHEEN
