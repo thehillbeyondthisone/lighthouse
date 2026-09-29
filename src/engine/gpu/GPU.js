@@ -140,6 +140,7 @@ export const GPU = {
 	// run this frame (compute, post) call ready( handle ), which falls back to a synchronous create.
 	_pending: new Set(),
 	syncCompiles: [], // labels of pipelines needed before their async compile finished (diagnostics)
+	syncPipelines: false, // compile every pipeline synchronously when it is requested
 
 	renderPipeline( desc ) {
 
@@ -156,6 +157,15 @@ export const GPU = {
 	_async( desc, kind ) {
 
 		const h = { pipeline: null, label: desc.label, desc, kind, failed: false };
+		// syncPipelines (?syncPipelines): compile right away (software renderers, where the batch of
+		// async compiles stalls; tools/shots)
+		if ( this.syncPipelines ) {
+
+			h.pipeline = kind === 'render' ? this.device.createRenderPipeline( desc ) : this.device.createComputePipeline( desc );
+			h.desc = null;
+			return h;
+
+		}
 		// started after the current task: a kernel dispatched right after it was made (a one-off bake)
 		// compiles once, synchronously, instead of twice
 		const p = Promise.resolve().then( () => {
@@ -175,8 +185,16 @@ export const GPU = {
 			} );
 
 		} ).finally( () => this._pending.delete( p ) );
+		p.label = desc.label;
 		this._pending.add( p );
 		return h;
+
+	},
+
+	// labels of the pipelines still compiling (diagnostics: what the loading screen waits for)
+	pendingLabels() {
+
+		return [ ...this._pending ].map( ( p ) => p.label );
 
 	},
 

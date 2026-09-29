@@ -1,9 +1,11 @@
-import { ComputeKernel } from '../engine/webgpu.js';
+import { ComputeKernel, GPU } from '../engine/webgpu.js';
 
 // Box-filtered mip chain of a square power-of-two 2d / 2d-array / cube texture in two compute
 // dispatches, instead of a render pass per level and layer (generateMipmaps):
 //   A: 16x16 threads per 32x32 tile of level 0 -> levels 1..5 through workgroup memory
 //   B: one workgroup per layer: level 5 -> the rest of the chain
+// On adapters that allow fewer than 5 storage textures per stage (the WebGPU default is 4) A stops
+// at that many levels and one small kernel per remaining level brings the chain to level 5.
 // The texture needs 'storage' usage and a storage-capable float format (e.g. rgba16float).
 //
 //   const mips = new ComputeMips( tex, 'label' );
@@ -17,7 +19,8 @@ export class ComputeMips {
 		this.res = res;
 		this.layers = tex.dimension === '3d' ? 1 : tex.depth;
 		const levels = tex.mipLevelCount;
-		const top = Math.min( 5, levels - 1 );
+		const maxOut = ( GPU.limits && GPU.limits.maxStorageTexturesPerShaderStage ) || 8;
+		const top = Math.min( 5, levels - 1, maxOut );
 		const out = ( l ) => ( { storageTexture: tex, access: 'write', view: { dimension: '2d-array', baseMipLevel: l, mipLevelCount: 1 } } );
 		const src = ( l ) => ( { texture: tex, view: { dimension: '2d-array', baseMipLevel: l, mipLevelCount: 1 } } );
 		// threads (lx, ly) < width reduce 2x2 of `from` (row 2 * width) into level lvl (and `to`)
@@ -56,6 +59,27 @@ fn main( @builtin( local_invocation_id ) lid: vec3u, @builtin( workgroup_id ) wi
 ${ codeA }
 }`,
 		} );
+
+		// levels past A's up to 5, one 2x2 reduction each (only on adapters short of storage textures)
+		this.steps = [];
+		for ( let l = top + 1; l <= Math.min( 5, levels - 1 ); l ++ ) {
+
+			const w = res >> l;
+			this.steps.push( { w, kernel: new ComputeKernel( {
+				label: label + ' mips ' + l,
+				bindings: { srcL: src( l - 1 ), outL: out( l ) },
+				workgroupSize: [ 8, 8, 1 ],
+				code: /* wgsl */`
+@compute @workgroup_size( WG_X, WG_Y, WG_Z )
+fn main( @builtin( global_invocation_id ) g: vec3u ) {
+	if ( g.x >= ${ w }u || g.y >= ${ w }u ) { return; }
+	let p = g.xy * 2u;
+	let v = ( textureLoad( srcL, p, g.z, 0 ) + textureLoad( srcL, p + vec2u( 1u, 0u ), g.z, 0 ) + textureLoad( srcL, p + vec2u( 0u, 1u ), g.z, 0 ) + textureLoad( srcL, p + vec2u( 1u, 1u ), g.z, 0 ) ) * 0.25;
+	textureStore( outL, g.xy, g.z, v );
+}`,
+			} ) } );
+
+		}
 
 		// level 5 is res / 32 texels square
 		this.kernelB = null;
@@ -100,6 +124,7 @@ ${ codeB }
 
 		const o = pass ? { pass } : undefined;
 		this.kernelA.dispatch( [ this.res / 32, this.res / 32, this.layers ], o );
+		for ( const s of this.steps ) s.kernel.dispatch( [ Math.ceil( s.w / 8 ), Math.ceil( s.w / 8 ), this.layers ], o );
 		if ( this.kernelB ) this.kernelB.dispatch( [ 1, 1, this.layers ], o );
 
 	}

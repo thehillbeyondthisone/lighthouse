@@ -280,18 +280,20 @@ export class Bench {
 	// 8-byte width / height header) to `url` + tag-view.bgra. The same sequence on the same code gives
 	// the same images, so a shot before and after a change can be compared pixel by pixel.
 	// dt > 0: the clock runs (animated artefacts: noise the temporal filters don't settle); one image per
-	// `every` frames after the first `frames` is uploaded as tag-view-N.bgra when `seq` > 1
-	async shots( views = DEFAULT_VIEWS, { tag = 'shot', frames = 64, url = 'http://127.0.0.1:5190/', dt = 0, seq = 1, every = 1 } = {} ) {
+	// `every` frames after the first `frames` is uploaded as tag-view-N.bgra when `seq` > 1.
+	// width / height: output size (smaller for software rendering, tools/shots); time: the time of day
+	// for every view instead of each view's own (colour keys)
+	async shots( views = DEFAULT_VIEWS, { tag = 'shot', frames = 64, url = 'http://127.0.0.1:5190/', dt = 0, seq = 1, every = 1, width = 2560, height = 1267, time } = {} ) {
 
 		const app = this.app;
 		app.engine.stop();
-		this.setSize();
-		const { width, height } = app.engine.canvas;
+		this.setSize( width, height );
 		if ( ! this._out || this._out.width !== width || this._out.height !== height ) this._out = new Texture( { width, height, format: GPU.format, usage: [ 'render', 'copySrc', 'sample' ], label: 'bench output' } );
 		G.time.value = 1000;
 		for ( const name of views ) {
 
 			this.pose( name );
+			if ( time !== undefined ) app.settings.timeOfDay = time;
 			app.post.outputTexture = this._out;
 			try {
 

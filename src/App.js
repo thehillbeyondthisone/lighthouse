@@ -80,6 +80,8 @@ export class App {
 			renderScale: 1, // internal resolution (the temporal upscaler reconstructs the output), Performance tab
 		};
 		this.qs = new URLSearchParams( location.search );
+		// ?syncPipelines: compile pipelines synchronously (software rendering, tools/shots)
+		if ( this.qs.has( 'syncPipelines' ) ) GPU.syncPipelines = true;
 
 	}
 
