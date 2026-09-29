@@ -22,24 +22,8 @@ app.init( ( p, text, until ) => ui.setLoading( p, text, until ) ).then( async ()
 	ui.setLoading( 1, 'Ready' );
 	await ui.hideLoader();
 	// frame-time benchmark and reference shots (see core/Bench.js): it drives the frames itself
-	if ( app.qs.has( 'bench' ) ) {
-
-		window.__bench = new ( await import( './core/Bench.js' ) ).Bench( app );
-		if ( app.qs.has( 'auto' ) ) window.__job = window.__bench.auto( app.qs.get( 'auto' ), { runs: Number( app.qs.get( 'runs' ) ) || 1 } );
-		// ?bench&shots=view1,view2[&tag=name][&dt=seconds][&seq=n&every=frames]: reference shots of the named views only (core/DebugViews.js; dt > 0: the clock runs, e.g. for the eased lens flare)
-		// [&w=px&h=px][&frames=n][&time=hours][&collector=url]: output size, frames per view, one time of day for every view, where to upload (tools/shots)
-		// &wdbg=N: the water shader's debug view (WaterMaterial debugMode) in the shots
-		if ( app.qs.has( 'wdbg' ) && app.waterMaterial ) app.waterMaterial.debugMode.value = Number( app.qs.get( 'wdbg' ) );
-		const qn = ( k, d ) => app.qs.has( k ) ? Number( app.qs.get( k ) ) : d;
-		// &ev=stops: exposure offset (with the clock stopped the auto exposure holds its first value)
-		if ( app.qs.has( 'ev' ) ) app.settings.exposure = 0.55 * Math.pow( 2, qn( 'ev', 0 ) );
-		if ( app.qs.has( 'shots' ) ) window.__job = window.__bench.shots( app.qs.get( 'shots' ).split( ',' ), {
-			tag: app.qs.get( 'tag' ) || 'shot', dt: qn( 'dt', 0 ), seq: qn( 'seq', 1 ), every: qn( 'every', 1 ),
-			width: qn( 'w', 2560 ), height: qn( 'h', 1267 ), frames: qn( 'frames', 64 ), time: qn( 'time', undefined ),
-			url: app.qs.get( 'collector' ) || 'http://127.0.0.1:5190/',
-		} );
-
-	} else app.start();
+	if ( app.qs.has( 'bench' ) ) ( await import( './core/Bench.js' ) ).startBench( app );
+	else app.start();
 	ui.showStartOverlay( () => {
 
 		app.input.requestLock();

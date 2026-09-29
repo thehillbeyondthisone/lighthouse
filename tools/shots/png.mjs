@@ -44,7 +44,8 @@ export function writePNG( path, width, height, rgba ) {
 
 }
 
-// minimal PNG reader: 8-bit RGB / RGBA, non-interlaced (what writePNG and browsers write) -> { width, height, rgba }
+// minimal PNG reader: 8-bit grey / grey + alpha / RGB / RGBA, non-interlaced (what writePNG, browsers and
+// the game's assets use) -> { width, height, rgba }
 export function readPNG( buf ) {
 
 	if ( buf.readUInt32BE( 0 ) !== 0x89504e47 ) throw new Error( 'not a PNG' );
@@ -57,7 +58,7 @@ export function readPNG( buf ) {
 		if ( kind === 'IHDR' ) {
 
 			width = data.readUInt32BE( 0 ); height = data.readUInt32BE( 4 ); type = data[ 9 ];
-			if ( data[ 8 ] !== 8 || data[ 12 ] !== 0 || ( type !== 2 && type !== 6 ) ) throw new Error( 'readPNG: 8-bit RGB / RGBA, non-interlaced only' );
+			if ( data[ 8 ] !== 8 || data[ 12 ] !== 0 || ! [ 0, 2, 4, 6 ].includes( type ) ) throw new Error( 'readPNG: 8-bit grey / RGB (+ alpha), non-interlaced only' );
 
 		} else if ( kind === 'IDAT' ) idat.push( data );
 		else if ( kind === 'IEND' ) break;
@@ -65,7 +66,7 @@ export function readPNG( buf ) {
 
 	}
 
-	const bpp = type === 6 ? 4 : 3, stride = width * bpp;
+	const bpp = { 0: 1, 2: 3, 4: 2, 6: 4 }[ type ], stride = width * bpp;
 	const raw = inflateSync( Buffer.concat( idat ) );
 	const px = new Uint8Array( stride * height );
 	for ( let y = 0; y < height; y ++ ) {
@@ -94,13 +95,51 @@ export function readPNG( buf ) {
 
 	if ( bpp === 4 ) return { width, height, rgba: px };
 	const rgba = new Uint8Array( width * height * 4 );
+	const grey = type === 0 || type === 4;
 	for ( let i = 0; i < width * height; i ++ ) {
 
-		rgba.set( px.subarray( i * 3, i * 3 + 3 ), i * 4 );
-		rgba[ i * 4 + 3 ] = 255;
+		const s = i * bpp, d = i * 4;
+		if ( grey ) rgba[ d ] = rgba[ d + 1 ] = rgba[ d + 2 ] = px[ s ];
+		else rgba.set( px.subarray( s, s + 3 ), d );
+		rgba[ d + 3 ] = type === 4 ? px[ s + 1 ] : 255;
 
 	}
 
 	return { width, height, rgba };
+
+}
+
+// a shot as the bench uploads it (u32 width, u32 height, BGRA8 rows) -> { w, h, rgba }
+export function bgraShot( body ) {
+
+	const w = body.readUInt32LE( 0 ), h = body.readUInt32LE( 4 );
+	const rgba = new Uint8Array( w * h * 4 );
+	for ( let i = 0; i < w * h; i ++ ) {
+
+		const s = 8 + i * 4;
+		rgba[ i * 4 ] = body[ s + 2 ]; rgba[ i * 4 + 1 ] = body[ s + 1 ]; rgba[ i * 4 + 2 ] = body[ s ]; rgba[ i * 4 + 3 ] = 255;
+
+	}
+
+	return { w, h, rgba };
+
+}
+
+// contact sheet: images of one size ({ w, h, rgba }) in a grid of `cols`, 4 px gutters
+export function writeSheet( file, images, cols ) {
+
+	const { w, h } = images[ 0 ], G = 4;
+	const rows = Math.ceil( images.length / cols );
+	const SW = cols * w + ( cols + 1 ) * G, SH = rows * h + ( rows + 1 ) * G;
+	const sheet = new Uint8Array( SW * SH * 4 ).fill( 18 );
+	for ( let i = 3; i < sheet.length; i += 4 ) sheet[ i ] = 255;
+	images.forEach( ( img, k ) => {
+
+		if ( img.w !== w || img.h !== h ) return;
+		const ox = G + ( k % cols ) * ( w + G ), oy = G + Math.floor( k / cols ) * ( h + G );
+		for ( let y = 0; y < h; y ++ ) sheet.set( img.rgba.subarray( y * w * 4, ( y + 1 ) * w * 4 ), ( ( oy + y ) * SW + ox ) * 4 );
+
+	} );
+	writePNG( file, SW, SH, sheet );
 
 }

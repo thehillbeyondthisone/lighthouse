@@ -141,6 +141,12 @@ export const GPU = {
 	_pending: new Set(),
 	syncCompiles: [], // labels of pipelines needed before their async compile finished (diagnostics)
 	syncPipelines: false, // compile every pipeline synchronously when it is requested
+	// one async compile at a time, each timed into compileTimes and logged (diagnostics: finds the
+	// pipelines a software renderer takes minutes over; ?serialPipelines, tools/shots --compile=serial)
+	serialPipelines: false,
+	compileTimes: [],
+	_serial: null,
+	_compiling: null,
 
 	renderPipeline( desc ) {
 
@@ -166,16 +172,23 @@ export const GPU = {
 			return h;
 
 		}
-		// started after the current task: a kernel dispatched right after it was made (a one-off bake)
-		// compiles once, synchronously, instead of twice
-		const p = Promise.resolve().then( () => {
+		const compile = () => {
 
 			if ( h.pipeline ) return;
 			const create = kind === 'render' ? this.device.createRenderPipelineAsync : this.device.createComputePipelineAsync;
+			const t0 = performance.now();
+			this._compiling = desc.label;
 			return create.call( this.device, desc ).then( ( pipeline ) => {
 
 				if ( ! h.pipeline ) h.pipeline = pipeline;
 				h.desc = null;
+				if ( this.serialPipelines ) {
+
+					const ms = Math.round( performance.now() - t0 );
+					this.compileTimes.push( [ desc.label, ms ] );
+					console.info( `pipeline "${ desc.label }" ${ ms } ms` );
+
+				}
 
 			}, ( e ) => {
 
@@ -184,17 +197,25 @@ export const GPU = {
 
 			} );
 
-		} ).finally( () => this._pending.delete( p ) );
+		};
+
+		// started after the current task: a kernel dispatched right after it was made (a one-off bake)
+		// compiles once, synchronously, instead of twice
+		const start = this.serialPipelines ? ( this._serial = ( this._serial || Promise.resolve() ).then( compile ) ) : Promise.resolve().then( compile );
+		const p = start.finally( () => this._pending.delete( p ) );
 		p.label = desc.label;
 		this._pending.add( p );
 		return h;
 
 	},
 
-	// labels of the pipelines still compiling (diagnostics: what the loading screen waits for)
+	// labels of the pipelines still compiling (diagnostics: what the loading screen waits for); with
+	// serialPipelines the one compiling now comes first
 	pendingLabels() {
 
-		return [ ...this._pending ].map( ( p ) => p.label );
+		const labels = [ ...this._pending ].map( ( p ) => p.label );
+		if ( this.serialPipelines && this._compiling && labels.length ) labels.unshift( '> ' + this._compiling );
+		return labels;
 
 	},
 

@@ -103,6 +103,7 @@ export class PostFX {
 			max: [ 'f32', 6.0 ],
 			up: [ 'f32', 1.6 ], // adaptation rates (1/s): brightening, darkening
 			down: [ 'f32', 1.1 ],
+			snap: [ 'f32', 0 ], // 1: adapt at once (reference shots with the clock stopped, ?bench&adapt)
 		}, { label: 'autoExposure' } );
 		// (`ref` is a WGSL keyword: the field is refLum, aliased as autoExposure.ref)
 		this.autoExposure = { ...this.aeUniforms.fields, ref: this.aeUniforms.fields.refLum };
@@ -458,7 +459,7 @@ ${ reduce }
 		let tgt = clamp( partial, ae.min, mix( ae.max, 2.0, frame.night ) );
 		let cur = aeExposure[ 0 ];
 		let rate = select( ae.down, ae.up, tgt > cur );
-		let k = 1.0 - exp( - frame.dt * rate );
+		let k = select( 1.0 - exp( - frame.dt * rate ), 1.0, ae.snap > 0.5 );
 		let next = exp2( mix( log2( max( cur, 1e-3 ) ), log2( tgt ), k ) );
 		aeExposure[ 0 ] = select( 1.0, next, ae.enabled > 0.5 );
 	}

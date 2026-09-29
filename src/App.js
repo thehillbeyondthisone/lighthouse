@@ -85,6 +85,7 @@ export class App {
 		this.qs = new URLSearchParams( location.search );
 		// ?syncPipelines: compile pipelines synchronously (software rendering, tools/shots)
 		if ( this.qs.has( 'syncPipelines' ) ) GPU.syncPipelines = true;
+		if ( this.qs.has( 'serialPipelines' ) ) GPU.serialPipelines = true;
 		// where and when (src/sky/Setting.js): ?setting=flannan puts the sky over the Flannan Isles on
 		// 15 December 1900 (a real sun and moon); the default is Tidewater's tropical sky
 		this.setting = new Setting( this.qs.get( 'setting' ) || 'tidewater' );
@@ -170,8 +171,12 @@ export class App {
 		this.terrain.mesh.material.appliesHillShadow = true;
 		this.rocks.material.appliesHillShadow = true;
 
+		// systems the Flannan Isles won't have (docs/PLAN.md §5.1) can be left out: ?noReef, ?noWhale,
+		// ?noWildlife, ?noSnow, or ?lite for all of them and ?noCaustics (fewer pipelines: software
+		// rendering, tools/shots)
+		const off = ( k ) => qs.has( k ) || qs.has( 'lite' );
 		await progress( 0.23, 'Growing the reef…' );
-		this.reef = new Reef( { scene, terrain: this.terrainData, shoreField: this.shoreField } );
+		this.reef = off( 'noReef' ) ? null : new Reef( { scene, terrain: this.terrainData, shoreField: this.shoreField } );
 
 		this.boat = new BoatModel();
 		scene.add( this.boat.group );
@@ -181,7 +186,7 @@ export class App {
 		// ---------------------------------------------------------------- ocean
 		await progress( 0.3, 'Simulating the ocean…' );
 		this.fft = new OceanFFT( renderer );
-		if ( this.reef.setOcean ) this.reef.setOcean( this.fft ); // coral / sea fan sway follows the simulated swell
+		if ( this.reef && this.reef.setOcean ) this.reef.setOcean( this.fft ); // coral / sea fan sway follows the simulated swell
 		this.foamTexture = createFoamTexture( renderer );
 		this.oceanLOD = new CDLOD( { gridSize: Number( qs.get( 'G' ) || 32 ), leafSize: 8, levels: 12, minY: - 25, maxY: 25 } );
 		this.surface = new WaterSurface( { fft: this.fft, cdlod: this.oceanLOD, foamTexture: this.foamTexture } );
@@ -190,7 +195,7 @@ export class App {
 		this.surface.detail = this.seaDetail;
 		this.shore = new ShoreWaves( this.terrainGPU );
 		this.surface.shore = this.shore;
-		this.caustics = qs.has( 'noCaustics' ) ? null : new Caustics( renderer, this.fft );
+		this.caustics = off( 'noCaustics' ) ? null : new Caustics( renderer, this.fft );
 		if ( this.caustics ) this.caustics.detail = this.seaDetail;
 
 		if ( ! qs.has( 'noSim' ) ) {
@@ -282,14 +287,14 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		this.query = new WaterQuery( renderer, this.surface );
 
-		this.marineSnow = new MarineSnow( { fft: this.fft, query: this.query } );
-		scene.add( this.marineSnow.mesh );
+		this.marineSnow = off( 'noSnow' ) ? null : new MarineSnow( { fft: this.fft, query: this.query } );
+		if ( this.marineSnow ) scene.add( this.marineSnow.mesh );
 
 		// ---- surf: plunging lips along the beach + spray particles (the breakers emit on the GPU;
 		// spray.emit() / emitAlongPoints() for boat bow spray and splashes)
 		this.spray = new Spray( renderer, { query: this.query, terrain: this.terrainGPU, sceneCopy: this.sceneRenderer.opaqueCopy, clouds: this.clouds } );
 		scene.add( this.spray.mesh );
-		if ( this.reef.setSpray ) this.reef.setSpray( this.spray ); // splashes of leaping fish
+		if ( this.reef && this.reef.setSpray ) this.reef.setSpray( this.spray ); // splashes of leaping fish
 		this.breakers = new Breakers( renderer, {
 			surface: this.surface, shore: this.shore, terrainData: this.terrainData, sky: this.sky,
 			spray: this.spray, clouds: this.clouds,
@@ -301,8 +306,8 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.boatCtl = new BoatController( { model: this.boat, query: this.query, terrain: this.terrainData, colliders: this.colliders } );
 		this.boatSpray = new BoatSpray( { boat: this.boatCtl, spray: this.spray } );
 		// humpback cruising the deep water around the island (model fetched from public/models/whale)
-		this.whale = new Whale( { scene, terrain: this.terrainData, query: this.query, spray: this.spray } );
-		try {
+		this.whale = off( 'noWhale' ) ? null : new Whale( { scene, terrain: this.terrainData, query: this.query, spray: this.spray } );
+		if ( this.whale ) try {
 
 			await this.whale.load();
 			if ( this.reef && this.reef.setWhale ) this.reef.setWhale( this.whale ); // escort fish, foam and slick
@@ -319,7 +324,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.surface.wake = this.wake;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl, reef: this.reef } );
 		// birds, beach crabs, sanderlings (after spray / query / boat, which they use)
-		this.wildlife = new Wildlife( {
+		this.wildlife = off( 'noWildlife' ) ? null : new Wildlife( {
 			scene, renderer, terrain: this.terrainData, terrainGPU: this.terrainGPU, shore: this.shore,
 			village: this.village, colliders: this.colliders, vegetation: this.vegetation, boat: this.boatCtl, boatModel: this.boat,
 			query: this.query, spray: this.spray, csm: this.csm,
@@ -680,7 +685,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		if ( this.caustics ) this.caustics.update();
 		// drawn while any part of the view can be under water (the specks above the surface are dropped)
-		this.marineSnow.update( this.camera, this.camera.position.y < ( this.cameraWaterHeight ?? 0 ) + LENS_REACH );
+		if ( this.marineSnow ) this.marineSnow.update( this.camera, this.camera.position.y < ( this.cameraWaterHeight ?? 0 ) + LENS_REACH );
 		this.airMotes.update( dt, this.camera, this.cameraWaterHeight ?? 0 );
 		if ( this.shoreSim ) this.shoreSim.update();
 		this.underwaterLighting.update( this.camera );
@@ -694,12 +699,12 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.terrain.update( this.camera );
 		this.rocks.update( this.camera );
 		this.debris.update( this.camera );
-		this.reef.update( dt, this.camera.position );
+		if ( this.reef ) this.reef.update( dt, this.camera.position );
 		this.village.update( dt );
 		if ( this.vegetation ) this.vegetation.update( dt, this.camera );
 		if ( this.whale ) this.whale.update( dt, this.camera );
 		this.boat.update( dt );
-		this.wildlife.update( dt, this.camera, this.freeCam ? null : this.player );
+		if ( this.wildlife ) this.wildlife.update( dt, this.camera, this.freeCam ? null : this.player );
 		this.localLights.update( this.camera, dt );
 
 		// ---- render

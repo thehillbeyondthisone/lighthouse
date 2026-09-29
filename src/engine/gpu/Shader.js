@@ -320,6 +320,25 @@ export function getBindGroupLayout( entries, label ) {
 }
 
 // A composed set of group-1 bindings: layout + a bind group rebuilt when a resource changes.
+// A layout over a per-stage limit fails validation with a count only: name its bindings (what to
+// pack or split to fit, e.g. WebGPU's default limits of 16 sampled / 4 storage textures per stage)
+function checkStageLimits( entries, names, label ) {
+
+	const L = GPU.limits;
+	if ( ! L ) return;
+	for ( const [ stage, bit ] of [ [ 'vertex', GPUShaderStage.VERTEX ], [ 'fragment', GPUShaderStage.FRAGMENT ], [ 'compute', GPUShaderStage.COMPUTE ] ] ) {
+
+		for ( const [ key, kind, limit ] of [ [ 'texture', 'sampled', L.maxSampledTexturesPerShaderStage ], [ 'storageTexture', 'storage', L.maxStorageTexturesPerShaderStage ] ] ) {
+
+			const hit = names.filter( ( n, i ) => entries[ i ][ key ] && ( entries[ i ].visibility & bit ) );
+			if ( hit.length > limit ) console.warn( `WebGPU: "${ label }" has ${ hit.length } ${ kind } textures in the ${ stage } stage (limit ${ limit }): ${ hit.join( ', ' ) }` );
+
+		}
+
+	}
+
+}
+
 export class BindingSet {
 
 	// stageOf: { name: 'vertex' | 'fragment' } for render bindings only one stage reads (keeps the
@@ -351,7 +370,9 @@ export class BindingSet {
 
 		}
 
-		this.layout = getBindGroupLayout( this.described.map( ( d, i ) => ( { binding: i, ...d.layout } ) ).filter( ( e, i ) => this.active[ i ] ), label );
+		const entries = this.described.map( ( d, i ) => ( { binding: i, ...d.layout } ) ).filter( ( e, i ) => this.active[ i ] );
+		checkStageLimits( entries, this.names.filter( ( n, i ) => this.active[ i ] ), label );
+		this.layout = getBindGroupLayout( entries, label );
 		this.group = null;
 		const n = this.names.length;
 		this._specs = this.names.map( ( k ) => specs[ k ] );

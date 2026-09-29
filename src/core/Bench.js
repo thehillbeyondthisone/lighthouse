@@ -19,6 +19,56 @@ const MAX = 512;
 const _up = new Vector3( 0, 1, 0 );
 const DEFAULT_VIEWS = [ 'beach', 'pier', 'sunGlitter', 'village', 'underwater', 'aerial', 'palms', 'boatFish' ];
 
+// ?bench: the bench for the console (window.__bench) and the job the URL asks for (window.__job, a
+// promise; src/main.js, and tools/shots in Node):
+//   &auto=tag[&runs=n]: reference shots then timings, uploaded (see auto())
+//   &shots=view1,view2[&tag=name][&dt=seconds][&seq=n&every=frames]: reference shots of the named views
+//     only (core/DebugViews.js; dt > 0: the clock runs, e.g. for the eased lens flare)
+//     [&w=px&h=px][&frames=n][&time=hours][&collector=url]: output size, frames per view, one time of
+//     day for every view, where to upload (tools/shots)
+//     [&styles=a,b][&times=h1,h2]: the views once per style (src/style/Styles.js) and per time of day,
+//     named tag[-t<hours>][-<style>]-view
+//   &wdbg=N: the water shader's debug view (WaterMaterial debugMode) in the shots
+//   &ev=stops: exposure offset (with the clock stopped the auto exposure holds its first value)
+//   &adapt: the auto exposure adapts at once every frame (shots at dusk or night exposed as the eye
+//     would be after a while, even with the clock stopped)
+export function startBench( app ) {
+
+	const qs = app.qs;
+	const bench = window.__bench = new Bench( app );
+	const qn = ( k, d ) => ( qs.has( k ) ? Number( qs.get( k ) ) : d );
+	const list = ( k ) => ( qs.has( k ) ? qs.get( k ).split( ',' ) : [ null ] );
+	if ( qs.has( 'wdbg' ) && app.waterMaterial ) app.waterMaterial.debugMode.value = qn( 'wdbg', 0 );
+	if ( qs.has( 'ev' ) ) app.settings.exposure = 0.55 * Math.pow( 2, qn( 'ev', 0 ) );
+	if ( qs.has( 'adapt' ) ) app.post.autoExposure.snap.value = 1;
+	if ( qs.has( 'auto' ) ) window.__job = bench.auto( qs.get( 'auto' ), { runs: qn( 'runs', 1 ) || 1 } );
+	if ( qs.has( 'shots' ) ) {
+
+		const views = qs.get( 'shots' ).split( ',' ), tag = qs.get( 'tag' ) || 'shot';
+		const opts = {
+			dt: qn( 'dt', 0 ), seq: qn( 'seq', 1 ), every: qn( 'every', 1 ), width: qn( 'w', 2560 ), height: qn( 'h', 1267 ),
+			frames: qn( 'frames', 64 ), url: qs.get( 'collector' ) || 'http://127.0.0.1:5190/',
+		};
+		window.__job = ( async () => {
+
+			for ( const time of list( 'times' ) ) for ( const style of list( 'styles' ) ) {
+
+				if ( style ) app.style.set( style );
+				const name = [ tag, time !== null ? 't' + time : '', style || '' ].filter( Boolean ).join( '-' );
+				await bench.shots( views, { ...opts, tag: name, time: time !== null ? Number( time ) : qn( 'time', undefined ) } );
+
+			}
+
+			return tag;
+
+		} )();
+
+	}
+
+	return bench;
+
+}
+
 export class Bench {
 
 	constructor( app ) {
