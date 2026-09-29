@@ -4,7 +4,7 @@
 // view plus a contact sheet (tools/shots/node-runner.mjs, browser.mjs).
 //
 //   npm run shots -- [--views=beach,pier] [--w=960] [--h=540] [--frames=12] [--time=15.2]
-//                    [--styles=photoreal,poster] [--times=12.4,15.5] [--adapt]
+//                    [--styles=photoreal,poster] [--times=12.4,15.5] [--adapt] [--dt=0.0167]
 //                    [--params="setting=flannan"] [--tag=name] [--out=dir] [--cols=3]
 //                    [--compile=async|serial|sync] [--maxmem=12] [--timeout=30]
 //
@@ -12,8 +12,11 @@
 // aerial, palms, ...) and the bench's boatFish / boatHelm. --styles and --times repeat them per style
 // (src/style/Styles.js) and per time of day in one run (loading is the slow part); the contact sheet
 // has a row per time and style. --adapt: the auto exposure adapts at once (dusk and night exposed as
-// the eye would see them; otherwise it holds its starting value with the clock stopped). --params is
-// appended to the page's query string (setting / any ?flag the app reads).
+// the eye would see them; otherwise it holds its starting value with the clock stopped). --dt: the
+// clock's step per frame, 1/60 s by default (the waves and clouds move as in play); --dt=0 holds
+// everything still for pixel-comparable reference shots, but the volumetric clouds' temporal
+// reconstruction is then still blocky after 24 frames. --params is appended to the page's query
+// string (setting / any ?flag the app reads).
 //
 // Software rendering: loading (every pipeline compiled on the CPU) takes a minute or two, then each
 // frame about a second at 960 x 540. The temporal filters settle in ~8 frames; the clouds, rebuilt a
@@ -42,7 +45,7 @@ const tag = args.tag || 'shot';
 const out = resolve( args.out || 'shots' );
 const styles = args.styles ? args.styles.split( ',' ) : [];
 const cols = Number( args.cols || ( views.length > 1 ? Math.min( 4, views.length ) : Math.max( 1, Math.min( 4, styles.length ) ) ) );
-const extra = ( args.styles ? '&styles=' + args.styles : '' ) + ( args.times ? '&times=' + args.times : '' ) + ( args.adapt ? '&adapt' : '' )
+const extra = `&dt=${ Number( args.dt ?? 1 / 60 ) }` + ( args.styles ? '&styles=' + args.styles : '' ) + ( args.times ? '&times=' + args.times : '' ) + ( args.adapt ? '&adapt' : '' )
 	+ ( args.params ? '&' + args.params.replace( /^[?&]/, '' ) : '' );
 const TIMEOUT = Number( args.timeout || 30 ) * 60 * 1000;
 const MAX_MB = Number( args.maxmem || 12 ) * 1024;

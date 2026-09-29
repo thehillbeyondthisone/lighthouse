@@ -87,6 +87,11 @@ entries first.
   - a layout over a per-stage limit now logs its bindings by name.
 - **Flags that leave out the tropical systems:** `?noReef`, `?noWhale`, `?noWildlife`, `?noSnow`,
   `?noCaustics`, or `?lite` for all of them (docs/PLAN.md §5.1).
+- **Clouds in the shots.** With the clock stopped (the bench's `dt = 0`) the volumetric clouds'
+  temporal reconstruction (a quarter-rate lattice) is still blocky after 24 frames. With the clock
+  running it's clean in 24. `npm run shots` now steps the clock by 1/60 s per frame by default; `--dt=0`
+  still gives pixel-comparable stills. The root cause in `SkyProClouds.js` isn't found yet. It isn't
+  stale light: the clouds already reset their history when the key light moves more than about 2.6°.
 - **Where the looks stand**, judged on the beach and aerial views at noon (sun at 8°) and 14:48 (sun at
   1°):
   - *Poster* reads as a painted winter noon: a slate zenith, a pale gold horizon, flat cream clouds, gold
@@ -97,7 +102,7 @@ entries first.
   - Weak spots:
     - Poster's sea is still the physical water reflecting the painted sky (it needs its own mode);
     - the tropical island's turquoise shallows and palms;
-    - cloud edges need ~24 frames to settle in the shots.
+    - the clouds' blockiness with the clock stopped (above).
 
   Next steps are in docs/PLAN.md §8.
 
