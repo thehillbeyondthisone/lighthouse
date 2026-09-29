@@ -99,10 +99,16 @@ entries first.
   - At dusk it becomes a violet-to-peach sunset, with lavender-blue shadows and long graphic shadow
     shapes.
   - *Albumen* reads as a print of the period.
+  - At night (16:00 blue hour; 05:00 under the real crescent moon):
+    - Photoreal is a dark, moonlit winter night;
+    - Poster turns lavender, then indigo;
+    - Albumen goes black, as a plate of 1900 would. It's a look for photographs and menus, not for
+      night play.
   - Weak spots:
     - Poster's sea is still the physical water reflecting the painted sky (it needs its own mode);
     - the tropical island's turquoise shallows and palms;
-    - the clouds' blockiness with the clock stopped (above).
+    - the clouds' blockiness with the clock stopped (above);
+    - a darker disc around the moon in Poster's night sky, still to look at.
 
   Next steps are in docs/PLAN.md §8.
 
