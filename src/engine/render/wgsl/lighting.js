@@ -383,7 +383,9 @@ fn studioEnvDiffuse( N: vec3f ) -> vec3f {
 // levels), after a wrap that lifts the terminator (z); the result lights the surface with the sun
 // colour tinted toward the colour script's key-light hue.
 fn styleBandedLight( irradiance: vec3f ) -> vec3f {
-	let vis = sat( luminance( irradiance ) / max( luminance( frame.sunColor ), 1e-6 ) );
+	// N.L x shadow; the gamma lifts a low sun's light into the upper bands (the winter sun at 8 degrees
+	// gives flat ground an N.L of 0.14: without it everything would sit in the bottom band)
+	let vis = pow( sat( luminance( irradiance ) / max( luminance( frame.sunColor ), 1e-6 ) ), max( frame.styleLight2.x, 0.05 ) );
 	let w = frame.styleLight.z;
 	let v = select( 0.0, sat( ( vis + w ) / ( 1.0 + w ) ), vis > 1e-4 );
 	let bands = max( frame.styleLight.x, 1.0 );

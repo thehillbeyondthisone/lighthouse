@@ -60,7 +60,8 @@ const FRAME_FIELDS = {
 	debug: [ 'vec4f', new Vector4() ],
 
 	// ---- the active style (src/style/StyleDirector.js writes these every frame; all zero = photoreal,
-	// and every style branch in the shaders is skipped). Colours are scene radiance.
+	// and every style branch in the shaders is skipped). Colours are sRGB display colours, blended as
+	// paint and converted to scene radiance in the shaders (wgsl/common.js styleScene).
 	styleMix: [ 'vec4f', new Vector4() ], // x fog, y sky, z light bands, w flat clouds (0..1 each)
 	styleFogNear: [ 'vec4f', new Vector4() ], // fog colour near / far along the ramp, away from the sun
 	styleFogFar: [ 'vec4f', new Vector4() ],
@@ -76,6 +77,7 @@ const FRAME_FIELDS = {
 	styleLight: [ 'vec4f', new Vector4() ], // x bands, y band softness, z wrap, w specular scale
 	styleShadowTint: [ 'vec4f', new Vector4() ], // rgb hue multiplier of the indirect light, w amount
 	styleSunTint: [ 'vec4f', new Vector4() ], // rgb hue multiplier of the key light, w amount
+	styleLight2: [ 'vec4f', new Vector4() ], // x gamma of the sun's N.L before banding (< 1: a low sun still reaches the upper bands), y exposure of the final pass (for styleScene)
 };
 
 const CAMERA_FIELDS = [ 'view', 'proj', 'viewProj', 'invView', 'invProj', 'invViewProj', 'viewProjNoJitter', 'prevViewProjNoJitter',

@@ -101,7 +101,7 @@ fn skySunDisk( dir: vec3f ) -> vec3f {
 	let physical = T * mask * limb * 2500.0 * skyParams.sunDiskIntensity * smoothstep( -0.02, 0.0, dir.y );
 	if ( frame.styleMix.y <= 0.0 ) { return physical; }
 	// Style Lab: a flat, slightly larger disc in the glow colour
-	let disc = frame.styleSkyGlow.rgb * 3.0 * smoothstep( 1.6, 1.3, r ) * smoothstep( -0.02, 0.0, dir.y );
+	let disc = styleScene( frame.styleSkyGlow.rgb ) * 3.0 * smoothstep( 1.6, 1.3, r ) * smoothstep( -0.02, 0.0, dir.y );
 	return mix( physical, disc, frame.styleMix.y );
 }
 
@@ -114,7 +114,8 @@ fn skyStyleGradient( dir: vec3f ) -> vec3f {
 	let col = mix( frame.styleSkyHorizon.rgb, frame.styleSkyZenith.rgb, g );
 	let ang = acos( clamp( dot( dir, atmosphereParams.sunDir ), -1.0, 1.0 ) );
 	let glow = exp( - ang / max( frame.styleSkyGlow.w, 0.02 ) ) * smoothstep( -0.3, 0.02, atmosphereParams.sunDir.y );
-	return mix( col, frame.styleSkyGlow.rgb, glow );
+	// (sRGB colours, blended as painted: common.js styleScene)
+	return styleScene( mix( col, frame.styleSkyGlow.rgb, glow ) );
 }
 
 // clouds cut into a few flat layers: the cover (1 - transmittance) rounded to levels with soft
@@ -127,10 +128,13 @@ fn skyStyleClouds( c: vec4f, dir: vec3f ) -> vec4f {
 	let levels = max( frame.styleCloudLit.w, 1.0 );
 	let s = clamp( frame.styleCloudShade.w * levels, 0.005, 0.5 );
 	let y = cover * levels;
-	let q = sat( ( floor( y ) + smoothstep( 0.5 - s, 0.5 + s, fract( y ) ) ) / levels );
+	// near the horizon the flat clouds dissolve into the painted gradient (low clouds foreshortened into
+	// a band of flat blocks otherwise)
+	let q = sat( ( floor( y ) + smoothstep( 0.5 - s, 0.5 + s, fract( y ) ) ) / levels ) * smoothstep( 0.03, 0.2, dir.y );
 	let ratio = luminance( c.rgb ) / max( cover, 1e-3 ) / max( luminance( atmosphereSkyLuminance( dir ) ), 1e-6 );
-	// two tones with a narrow edge: lit where the cloud is clearly brighter than the sky behind it
-	let col = mix( frame.styleCloudShade.rgb, frame.styleCloudLit.rgb, smoothstep( 1.0, 1.3, ratio ) );
+	// two tones: lit where the cloud is clearly brighter than the sky behind it (a wide edge: near a low
+	// sun the ratio is noisy, and a narrow one turns the noise into speckles)
+	let col = styleScene( mix( frame.styleCloudShade.rgb, frame.styleCloudLit.rgb, smoothstep( 0.8, 1.6, ratio ) ) );
 	return mix( c, vec4f( col * q, 1.0 - q ), k );
 }
 

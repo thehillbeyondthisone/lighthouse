@@ -350,7 +350,11 @@ fn styleFogApply( c: vec3f, dist: f32, dir: vec3f, camH: f32 ) -> vec3f {
 	let col = mix( mix( frame.styleFogNear.rgb, frame.styleFogFar.rgb, t ), mix( frame.styleFogSunNear.rgb, frame.styleFogSunFar.rgb, t ), k );
 	let meanH = max( camH + dir.y * dist * 0.5, 0.0 );
 	let a = frame.styleFogShape2.x * pow( t, max( sh.z, 0.05 ) ) * exp( - meanH / max( sh.w, 1.0 ) );
-	return mix( c, col, a );
+	// blended as paint, in sRGB display colours (the ramp's colours and opacity read as authored:
+	// common.js styleScene), plus whatever of the scene colour lies beyond the curve's clamp (sun
+	// glints stay bright)
+	let d = stylePaint( c );
+	return c + styleScene( mix( d, col, a ) ) - styleScene( d );
 }
 
 // c: the scene colour at uv. Returns the hazed colour.

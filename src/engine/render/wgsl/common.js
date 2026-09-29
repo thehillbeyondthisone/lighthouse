@@ -3,6 +3,26 @@ import { ShaderModule } from '../../gpu/Shader.js';
 // Shared WGSL helpers: constants, depth / position reconstruction (reversed-Z aware), hashes,
 // noise (MaterialX-style gradient / cell / worley noise, replacing TSL's mx_* functions), color.
 
+// the final pass's tone curve (three's ACES fit, src/post/PostFX.js), rows; for the Style Lab helpers
+const ACES_IN = [ [ 0.59719, 0.35458, 0.04823 ], [ 0.07600, 0.90834, 0.01566 ], [ 0.02840, 0.13383, 0.83777 ] ];
+const ACES_OUT = [ [ 1.60475, - 0.53108, - 0.07367 ], [ - 0.10208, 1.10813, - 0.00605 ], [ - 0.00327, - 0.07276, 1.07602 ] ];
+
+function inv3( m ) {
+
+	const [ [ a, b, c ], [ d, e, f ], [ g, h, i ] ] = m;
+	const A = e * i - f * h, B = f * g - d * i, C = d * h - e * g;
+	const det = a * A + b * B + c * C;
+	return [
+		[ A / det, ( c * h - b * i ) / det, ( b * f - c * e ) / det ],
+		[ B / det, ( a * i - c * g ) / det, ( c * d - a * f ) / det ],
+		[ C / det, ( b * g - a * h ) / det, ( a * e - b * d ) / det ],
+	];
+
+}
+
+// a row-major 3x3 as a WGSL matrix (WGSL constructors are column-major)
+const mat = ( m ) => `mat3x3f( ${ [ 0, 1, 2 ].map( ( c ) => m.map( ( r ) => r[ c ].toPrecision( 9 ) ).join( ', ' ) ).join( ', ' ) } )`;
+
 export const commonModule = new ShaderModule( {
 	name: 'common',
 	code: /* wgsl */`
@@ -253,6 +273,29 @@ fn srgbToLinear( c: vec3f ) -> vec3f {
 }
 fn linearToSrgb( c: vec3f ) -> vec3f {
 	return select( 1.055 * pow( c, vec3f( 1.0 / 2.4 ) ) - 0.055, c * 12.92, c <= vec3f( 0.0031308 ) );
+}
+
+// ---- Style Lab (src/style): a style's colours are sRGB display colours (hex / 255), what should come
+// out of the final pass's tone curve (PostFX acesFilmicToneMapping) at the style's exposure
+// frame.styleLight2.y. Painted skies and fog blend in sRGB, like paint in an image editor (in scene
+// radiance a bright colour swamps a dim one; in linear light cream and slate blue mix to a warm
+// grey), then come back to scene radiance through the inverse curve: styleScene( paint ).
+fn styleScene( srgb: vec3f ) -> vec3f { return styleToScene( srgbToLinear( srgb ) ); }
+// scene radiance -> the sRGB display colour it will show as
+fn stylePaint( c: vec3f ) -> vec3f { return linearToSrgb( styleToDisplay( c ) ); }
+fn styleToDisplay( c: vec3f ) -> vec3f {
+	let x = ${ mat( ACES_IN ) } * ( c * ( frame.styleLight2.y / 0.6 ) );
+	let v = ( x * ( x + 0.0245786 ) - 0.000090537 ) / ( x * ( 0.983729 * x + 0.4329510 ) + 0.238081 );
+	return clamp( ${ mat( ACES_OUT ) } * v, vec3f( 0.0 ), vec3f( 1.0 ) );
+}
+fn styleToScene( d: vec3f ) -> vec3f {
+	// the fit y = ( x ( x + a ) - b ) / ( x ( c x + d ) + e ) solved for x >= 0
+	let y = clamp( ${ mat( inv3( ACES_OUT ) ) } * clamp( d, vec3f( 1e-5 ), vec3f( 0.985 ) ), vec3f( 0.0 ), vec3f( 1.0 ) );
+	let qa = 1.0 - 0.983729 * y;
+	let qb = 0.0245786 - 0.4329510 * y;
+	let qc = - ( 0.000090537 + 0.238081 * y );
+	let x = ( - qb + sqrt( max( qb * qb - 4.0 * qa * qc, vec3f( 0.0 ) ) ) ) / ( 2.0 * qa );
+	return max( ${ mat( inv3( ACES_IN ) ) } * x, vec3f( 0.0 ) ) * ( 0.6 / max( frame.styleLight2.y, 1e-4 ) );
 }
 `,
 } );

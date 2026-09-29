@@ -494,13 +494,20 @@ W=800 H=400 node test/post-chain.mjs air out.png    # the full post chain (GTAO,
 Without that variable, `npm test` gets through the game-logic tests and then stops at "No WebGPU adapter
 found".
 
-**To build:**
-- `test/style-lab.mjs`: render a fixed set of scenes and views through every preset, and write a labelled
-  contact sheet per preset plus a diff against the baseline.
-- `npm run style-lab`, which finds `vk_swiftshader_icd.json` under `/opt/pw-browsers/*/chrome-linux/` so it
-  survives Playwright updates.
-- The in-browser `?bench&shots=` path (`src/core/Bench.js`) produces the full-game shots and timings on a
-  real GPU.
+**Built (29 September): `npm run shots`** (`tools/shots`) renders the real game, in any style and at any
+time of day, with no browser or GPU. The whole app runs in Node on Dawn behind a small browser stand-in, and
+finds the SwiftShader driver by itself. Loading takes about 75 s; each frame 2–5 s at 640 × 360.
+
+```sh
+npm run shots -- --views=beach,aerial --styles=photoreal,poster,albumen --times=12.4,14.8 \
+                 --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
+```
+
+This writes one PNG per view, style and time, plus a contact sheet with a row per time and style. Headless
+Chromium can't do this: on a software adapter it holds WebGPU to its default limits (16 sampled textures
+per stage), and the water shader reads 24.
+
+**Still to build:** labels on the contact sheets, and a diff against a stored baseline per preset.
 
 ### 4.7 Judging the looks
 
@@ -701,15 +708,28 @@ can run in parallel from Phase 2 onward.
 | **6. Sound and music** | the soundscape | §7 | every space and weather has its sound | M |
 | **7. Polish and ship** | release | performance; accessibility (subtitles for all Morse and Gaelic, colour-blind-safe palettes, motion options); the restyled UI, loader and key art; the fact-and-fiction screen; credits and licences; playtests; deploy (the existing Pages workflow publishes `main`) | shipped | M |
 
+### Done so far (29 September)
+
+- Phase 0:
+  - the plan and `HISTORY.md`;
+  - `?lite` and the `?no…` flags that leave out the tropical systems;
+  - the harness (`npm run shots`, §4.6).
+- The engine now runs on WebGPU's default limits for everything except the world materials (the water reads
+  24 textures).
+- Phase 1, §4.5 steps 1–6, in a first cut:
+  - `?style=` with the StyleDirector and a Style tab;
+  - `?setting=flannan`, with the real sun and moon;
+  - Poster: ramp fog, a painted sky, flat clouds, banded light and tints;
+  - Albumen and Cyanotype prints in the final pass.
+
 ### The next five tasks
 
-1. Add `npm run style-lab`, with automatic detection of the SwiftShader driver, and a baseline contact
-   sheet.
-2. Add the `StyleProfile` scaffolding, `?style=` and the Style tab, with no visual change: the baseline shots
-   stay identical.
-3. Drive the sun and moon from latitude and date (58.29°N, 15 December 1900) behind `?setting=flannan`.
-4. The ramp fog (S1) in `AirHaze`.
-5. Modes for the final pass: LUT, and the Albumen print (S2).
+1. The Poster colour script across all eight keys (§4.8), judged on contact sheets of the review views.
+2. A stylized water mode. Poster's sea reflects the painted sky and needs its own ramp (§4.5 step 9), along
+   with foliage puff and detail fade.
+3. The edge pass (§4.5 step 7), then the palette and dither mode of the final pass.
+4. Eilean Mòr's terrain from real elevation data (Phase 2, §5.2).
+5. Behind `?setting=flannan`, cut the tropical systems for good: palms, the reef, turquoise shallows.
 
 ---
 

@@ -23,6 +23,83 @@ entries first.
 
   Without that variable, `npm test` passes the game-logic tests and then fails with "No WebGPU adapter
   found". If the path has changed, look for `vk_swiftshader_icd.json` under `/opt/pw-browsers/`.
+- **See the game** without a GPU. `npm run shots` finds the driver itself; flags are in
+  `tools/shots/shots.mjs`. A run takes 5–20 min and writes PNGs plus a contact sheet to `shots/`:
+
+  ```sh
+  npm run shots -- --views=beach,aerial --styles=photoreal,poster,albumen --times=12.4,14.8 \
+                   --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
+  ```
+
+## 2026-09-29: the Style Lab's first build
+
+- **The post chain and the compute passes fit WebGPU's default limits** (16 sampled / 4 storage textures
+  per stage: software renderers, many mobile GPUs). Before this, the haze, beauty, environment-mip,
+  ocean-mip, caustics-mip and underwater-light passes failed validation there. The world materials still
+  don't fit: the water reads 24 sampled textures, the terrain 17, the village stall 19. The fix:
+  - bindings no entry point reaches get no layout entry (`composeShader` / `BindingSet` in
+    `src/engine/gpu/Shader.js`);
+  - the mip kernels split their work to fit the storage-texture limit.
+
+  The post chain and the engine smoke renders are pixel-identical before and after.
+  `WEBGPU_DEFAULT_LIMITS=1` makes any Node engine test run with those limits.
+- **The real sky** (`src/sky/Setting.js`, `?setting=flannan`): latitude and date give the sun and a real
+  moon. On 15 December 1900 at the Flannans the noon sun stands at 8.4°, and a waning moon, about a
+  third lit, rises after midnight. The moon disc shows its phase, and moonless nights are nearly dark.
+- **The Style Lab** (`src/style`, `?style=`, a Style tab in the panel; docs/PLAN.md §4):
+  - *Poster*, the Firewatch lineage: ramped fog, a painted sky with flat two-tone clouds, banded light
+    with tinted shadows, and a grade;
+  - *Albumen* and *Cyanotype*, a print of 1900: blue-sensitive film, halation, Petzval swirl, paper,
+    dust, toning;
+  - *Photoreal*, unchanged.
+
+  Colours are authored as display hex, blend in sRGB like paint (keys, gradients, fog ramps, fog
+  opacity), and reach scene radiance through the inverse tone curve per pixel
+  (`styleScene` in `src/engine/render/wgsl/common.js`). The first build converted them to scene
+  radiance and blended there, so a bright horizon swamped the zenith: the sky came out peach from top
+  to bottom. It also banded N·L against the sun's full strength, so the winter sun's weak light left
+  everything in the bottom band. `lightShape.gamma` lifts it. The flat clouds now fade out near the
+  horizon.
+- **Screenshots of the real game** in this container: `npm run shots` (`tools/shots`).
+  - The whole app runs in Node on Dawn, with SwiftShader when there is no GPU, behind a small browser
+    stand-in (`tools/shots/browser.mjs`: inert DOM, fetch from `public/`, PNG and JPEG decoding through
+    `jpeg-js`, a new dev dependency). It goes through the app's own `?bench&shots` path
+    (`startBench` in `src/core/Bench.js`, shared with `src/main.js`).
+  - Loading takes about 75 s, and each frame 2–5 s at 640 × 360. Peak memory is about 3.6 GB.
+  - `--styles=a,b --times=h1,h2` repeat the views per style and time of day in one run. `--adapt`
+    lets the exposure settle at dusk and night.
+  - Example:
+    `npm run shots -- --views=beach,aerial --styles=photoreal,poster --params="setting=flannan" --adapt`.
+  - `tools/shots/diff.mjs` compares two PNGs.
+  - `STYLE=poster REAL_SKY=15.5 W=800 H=400 node test/post-chain.mjs air out.png` renders a style
+    through the full post chain in about 30 s.
+- **Why not Chromium.** Headless Chromium on SwiftShader holds the adapter to WebGPU's default limits
+  (16 sampled textures per stage), and the water shader reads 24. No flag changes that. Dawn in Node
+  reports the driver's own limits (48).
+- **A shader that took SwiftShader minutes and 12 GB.** "Wake Rows" (`src/ocean/WakeSim.js`) had about
+  50 short-circuit `&&` / `||` in a row inside a loop, once inlined. Each one is a branch, and
+  SwiftShader's control-flow walk (`Spirv::Function::ExistsPath`) is exponential in consecutive
+  branches. The fix uses `&` / `|` / `all()` / `any()`, which give the same values with no branch, in
+  the wake helpers and `terrainHeightAt`. The old kernel passed 4 GB in 55 s; the new one compiles at
+  once. Tools for next time:
+  - `--compile=serial` (`?serialPipelines`) times each pipeline;
+  - the shots tool stops a run past `--maxmem`;
+  - a layout over a per-stage limit now logs its bindings by name.
+- **Flags that leave out the tropical systems:** `?noReef`, `?noWhale`, `?noWildlife`, `?noSnow`,
+  `?noCaustics`, or `?lite` for all of them (docs/PLAN.md §5.1).
+- **Where the looks stand**, judged on the beach and aerial views at noon (sun at 8°) and 14:48 (sun at
+  1°):
+  - *Poster* reads as a painted winter noon: a slate zenith, a pale gold horizon, flat cream clouds, gold
+    glitter.
+  - At dusk it becomes a violet-to-peach sunset, with lavender-blue shadows and long graphic shadow
+    shapes.
+  - *Albumen* reads as a print of the period.
+  - Weak spots:
+    - Poster's sea is still the physical water reflecting the painted sky (it needs its own mode);
+    - the tropical island's turquoise shallows and palms;
+    - cloud edges need ~24 frames to settle in the shots.
+
+  Next steps are in docs/PLAN.md §8.
 
 ## 2026-09-28: the plan
 
