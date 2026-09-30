@@ -236,6 +236,7 @@ export class Bench {
 		app.setFreeCam( true );
 		app.fly.setPose( new Vector3( ...v.p ), v.yaw, v.pitch );
 		app.fly.velocity.set( 0, 0, 0 );
+		if ( app.cameraCut ) app.cameraCut();
 
 	}
 

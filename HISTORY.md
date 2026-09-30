@@ -97,6 +97,10 @@ on it, and Lewis, Harris and St Kilda across the sea.
   - the player starts in the station's yard.
 - **Review views:** `fStation`, `fYard`, `fChapel`, `fLewis`, `fEastSea`, `fWestLanding`, `fAerial`,
   `fDusk`. Views can now be given as a target point (`at`).
+- **Camera cuts.** `App.cameraCut()`, called by `__view` and by the bench between review views, restarts
+  the upscaler's history and the clouds'. The upscaler keeps the history of still pixels whose shading
+  holds. Before this, one view could show the last view's sea in its sky: the aerial's glitter over
+  the dusk.
 - **Checking geometry without the GPU.** The scratch script (a small software rasterizer over the
   builder's batches) renders the station in seconds. A real run
   (`npm run shots -- --views=fStation,fYard --params="setting=flannan&lite" --adapt`) loads in about 55 s

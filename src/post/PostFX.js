@@ -672,6 +672,16 @@ fn fragment( in: FSIn ) -> vec4f {
 
 	}
 
+	// a camera cut (a review view, a teleport): the temporal passes start over, so nothing of the last
+	// shot lingers in still pixels (the upscaler keeps the history of pixels whose shading holds)
+	cut() {
+
+		if ( this.taau ) this.taau._needsRestart = true;
+		if ( this.motionBlur ) this.motionBlur._hasPrev = false;
+		this._hasPrev = false;
+
+	}
+
 	// the internal (scene) size of this frame
 	internalSize( target = new Vector2() ) {
 

@@ -463,6 +463,14 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 	}
 
+	// the camera jumped (a review view, a teleport): nothing temporal carries over to the new shot
+	cameraCut() {
+
+		if ( this.post && this.post.cut ) this.post.cut();
+		if ( this.clouds && this.clouds.resetHistory ) this.clouds.resetHistory();
+
+	}
+
 	// Build every pipeline up front, then wait for the GPU (keeps first-use compiles behind the loading
 	// screen). The precompile frame visits every mesh of every pass, hidden or out of view, and the
 	// pipelines compile in parallel in the background (GPU.renderPipeline); the refraction pass and
