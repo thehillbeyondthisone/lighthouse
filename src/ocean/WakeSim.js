@@ -356,22 +356,26 @@ fn wakeBrev( v: u32 ) -> u32 { return reverseBits( v ) >> ( 32u - WAKE_LOG2N ); 
 
 // toroidal texel -> world cell index in the window starting at o
 fn wakeWorldIndex( i: i32, o: i32 ) -> i32 { return o + ( ( i - o ) & i32( WAKE_MASK ) ); }
+// (& and |, not && and ||, in the simulation's per-cell code: a short-circuit operator is a branch,
+// and ~50 of them in a row inside the kernels' loops take SwiftShader's compiler minutes and GBs)
 fn wakeInWindow( I: i32, J: i32, o: vec2f ) -> bool {
-	return I >= i32( o.x ) && I < i32( o.x ) + i32( WAKE_N ) && J >= i32( o.y ) && J < i32( o.y ) + i32( WAKE_N );
+	let lo = vec2i( i32( o.x ), i32( o.y ) );
+	let c = vec2i( I, J );
+	return all( ( c >= lo ) & ( c < lo + vec2i( i32( WAKE_N ) ) ) );
 }
 
 // state of texel (c, r) if it held the same world cell last step, else zero
 fn wakeLoadState( c: u32, r: u32 ) -> vec4f {
 	let I = wakeWorldIndex( i32( c ), i32( wk.origin.x ) );
 	let J = wakeWorldIndex( i32( r ), i32( wk.origin.y ) );
-	let keep = wakeInWindow( I, J, wk.prev ) && wk.reset < 0.5;
+	let keep = wakeInWindow( I, J, wk.prev ) & ( wk.reset < 0.5 );
 	return select( vec4f( 0.0 ), wakeState[ r * WAKE_N + c ], keep );
 }
 
 fn wakeLoadAer( c: u32, r: u32 ) -> f32 {
 	let I = wakeWorldIndex( i32( c ), i32( wk.origin.x ) );
 	let J = wakeWorldIndex( i32( r ), i32( wk.origin.y ) );
-	let keep = wakeInWindow( I, J, wk.prev ) && wk.reset < 0.5;
+	let keep = wakeInWindow( I, J, wk.prev ) & ( wk.reset < 0.5 );
 	return select( 0.0, wakeAerA[ r * WAKE_N + c ], keep );
 }
 
@@ -478,7 +482,7 @@ fn wakeCell( col: u32, row: u32 ) -> vec4f {
 
 	// obstacles: dry land, pier piles
 	let puv = ( p - wk.pileBox.xy ) / wk.pileBox.zw;
-	let pileIn = select( 0.0, 1.0, puv.x > 0.0 && puv.x < 1.0 && puv.y > 0.0 && puv.y < 1.0 );
+	let pileIn = select( 0.0, 1.0, all( ( puv > vec2f( 0.0 ) ) & ( puv < vec2f( 1.0 ) ) ) );
 	let pile = textureSampleLevel( wakePileTex, smpLinearClamp, puv, 0.0 ).x * pileIn;
 	let wet = smoothstep( 0.0, 0.05, d );
 	let keep = wet * sat( 1.0 - pile * 2.5 );

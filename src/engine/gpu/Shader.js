@@ -320,16 +320,37 @@ export function getBindGroupLayout( entries, label ) {
 }
 
 // A composed set of group-1 bindings: layout + a bind group rebuilt when a resource changes.
+// A layout over a per-stage limit fails validation with a count only: name its bindings (what to
+// pack or split to fit, e.g. WebGPU's default limits of 16 sampled / 4 storage textures per stage)
+function checkStageLimits( entries, names, label ) {
+
+	const L = GPU.limits;
+	if ( ! L ) return;
+	for ( const [ stage, bit ] of [ [ 'vertex', GPUShaderStage.VERTEX ], [ 'fragment', GPUShaderStage.FRAGMENT ], [ 'compute', GPUShaderStage.COMPUTE ] ] ) {
+
+		for ( const [ key, kind, limit ] of [ [ 'texture', 'sampled', L.maxSampledTexturesPerShaderStage ], [ 'storageTexture', 'storage', L.maxStorageTexturesPerShaderStage ] ] ) {
+
+			const hit = names.filter( ( n, i ) => entries[ i ][ key ] && ( entries[ i ].visibility & bit ) );
+			if ( hit.length > limit ) console.warn( `WebGPU: "${ label }" has ${ hit.length } ${ kind } textures in the ${ stage } stage (limit ${ limit }): ${ hit.join( ', ' ) }` );
+
+		}
+
+	}
+
+}
+
 export class BindingSet {
 
 	// stageOf: { name: 'vertex' | 'fragment' } for render bindings only one stage reads (keeps the
-	// per-stage uniform buffer / texture counts down); demote: uniform blocks bound as read-only storage
-	constructor( specs, stage, label = 'bindings', stageOf = null, demote = null ) {
+	// per-stage uniform buffer / texture counts down); demote: uniform blocks bound as read-only storage;
+	// unused: names no entry point reaches (declared in the WGSL, left out of the layout and the group)
+	constructor( specs, stage, label = 'bindings', stageOf = null, demote = null, unused = null ) {
 
 		this.label = label;
 		this.stage = stage;
 		this.names = Object.keys( specs );
 		this.specs = specs;
+		this.active = this.names.map( ( n ) => ! ( unused && unused.has( n ) ) );
 		this.described = this.names.map( ( n ) => describe( n, specs[ n ], stage ) );
 		if ( stageOf ) for ( let i = 0; i < this.names.length; i ++ ) {
 
@@ -349,12 +370,14 @@ export class BindingSet {
 
 		}
 
-		this.layout = getBindGroupLayout( this.described.map( ( d, i ) => ( { binding: i, ...d.layout } ) ), label );
+		const entries = this.described.map( ( d, i ) => ( { binding: i, ...d.layout } ) ).filter( ( e, i ) => this.active[ i ] );
+		checkStageLimits( entries, this.names.filter( ( n, i ) => this.active[ i ] ), label );
+		this.layout = getBindGroupLayout( entries, label );
 		this.group = null;
 		const n = this.names.length;
 		this._specs = this.names.map( ( k ) => specs[ k ] );
 		this._kinds = this._specs.map( kindOf );
-		this._blocks = this._specs.filter( ( sp ) => sp.uniform ).map( ( sp ) => sp.uniform );
+		this._blocks = this._specs.filter( ( sp, i ) => sp.uniform && this.active[ i ] ).map( ( sp ) => sp.uniform );
 		this._objs = new Array( n ).fill( null ); // scratch: resolved resources of this call
 		this._vers = new Array( n ).fill( 0 );
 		this._entry = null; // { objs, vers, group } of this.group
@@ -384,10 +407,11 @@ export class BindingSet {
 
 		if ( token !== undefined && token === this._token && this.group ) return this.group;
 		this._token = token;
-		const specs = this._specs, kinds = this._kinds, objs = this._objs, vers = this._vers;
+		const specs = this._specs, kinds = this._kinds, objs = this._objs, vers = this._vers, active = this.active;
 		const n = specs.length;
 		for ( let i = 0; i < n; i ++ ) {
 
+			if ( ! active[ i ] ) continue;
 			const spec = specs[ i ];
 			let o = null, v = 0;
 			switch ( kinds[ i ] ) {
@@ -437,8 +461,8 @@ export class BindingSet {
 
 		}
 
-		const entries = new Array( n );
-		for ( let i = 0; i < n; i ++ ) entries[ i ] = { binding: i, resource: resourceOf( specs[ i ] ) };
+		const entries = [];
+		for ( let i = 0; i < n; i ++ ) if ( active[ i ] ) entries.push( { binding: i, resource: resourceOf( specs[ i ] ) } );
 		this.group = GPU.device.createBindGroup( { label: this.label, layout: this.layout, entries } );
 		this._entry = { objs: objs.slice(), vers: vers.slice(), group: this.group };
 		cache.unshift( this._entry );
@@ -528,20 +552,32 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 	}
 
 	for ( const k in bindings ) specs[ k ] = bindings[ k ];
+
+	// Bindings no entry point reaches get no layout entry. A composed module brings the bindings of
+	// all its helpers, used or not; WebGPU only needs layout entries for the resources an entry point
+	// statically uses, and the per-stage limits count layout entries (16 sampled and 4 storage
+	// textures on adapters with the default limits, e.g. software renderers and some mobile GPUs).
+	// They stay declared, so the helpers that use them still compile.
+	let all = '';
+	for ( const m of mods ) all += m.code + '\n';
+	const full = preprocess( all + code, defines );
+	const reach = new Map();
+	for ( const e of full.matchAll( /@(?:vertex|fragment|compute)\b[^{;]*?\bfn\s+([A-Za-z_]\w*)/g ) ) if ( ! reach.has( e[ 1 ] ) ) reach.set( e[ 1 ], reachableIdentifiers( full, e[ 1 ] ) );
+	const unused = new Set();
+	if ( reach.size ) for ( const k in specs ) if ( ! [ ...reach.values() ].some( ( used ) => used.has( k ) ) ) unused.add( k );
+
 	let stageOf = null;
 	let demote = null;
-	if ( stage === 'render' && /@vertex\s+fn\s+vs\b/.test( code ) ) {
+	if ( stage === 'render' && reach.has( 'vs' ) ) {
 
 		// bindings only one entry point can reach are declared for that stage only (per-stage limits:
 		// 12 uniform buffers, 16 sampled textures on some adapters)
-		let all = '';
-		for ( const m of mods ) all += m.code + '\n';
-		const full = preprocess( all + code, defines );
-		const usedV = reachableIdentifiers( full, 'vs' );
-		const usedF = /@fragment\s+fn\s+fs\b/.test( full ) ? reachableIdentifiers( full, 'fs' ) : null;
+		const usedV = reach.get( 'vs' );
+		const usedF = reach.get( 'fs' ) || null;
 		stageOf = {};
 		for ( const k in specs ) {
 
+			if ( unused.has( k ) ) continue;
 			if ( ! usedV.has( k ) && ( ! usedF || usedF.has( k ) ) ) stageOf[ k ] = 'fragment';
 			else if ( usedF && ! usedF.has( k ) && usedV.has( k ) ) stageOf[ k ] = 'vertex';
 
@@ -553,7 +589,7 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 		const limits = GPU.limits || {};
 		const maxU = ( limits.maxUniformBuffersPerShaderStage || 12 ) - 2;
 		const maxS = { vertex: limits.maxStorageBuffersInVertexStage ?? 4, fragment: limits.maxStorageBuffersInFragmentStage ?? limits.maxStorageBuffersPerShaderStage ?? 8 };
-		const inStage = ( k, st ) => ! stageOf[ k ] || stageOf[ k ] === st;
+		const inStage = ( k, st ) => ! unused.has( k ) && ( ! stageOf[ k ] || stageOf[ k ] === st );
 		for ( const st of [ 'fragment', 'vertex' ] ) {
 
 			const uniforms = Object.keys( specs ).filter( ( k ) => specs[ k ].uniform && inStage( k, st ) && ! demote.has( k ) );
@@ -575,7 +611,7 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 
 	}
 
-	const set = new BindingSet( specs, stage, label + '.g1', stageOf, demote );
+	const set = new BindingSet( specs, stage, label + '.g1', stageOf, demote, unused );
 	const g0 = group0( stage );
 	const structs = [ ...new Set( [ ...g0.structs(), ...set.structs() ] ) ];
 	let src = '';

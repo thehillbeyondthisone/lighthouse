@@ -235,8 +235,8 @@ fn terrainHeightAt( xz: vec2f ) -> f32 {
 	let c = textureLoad( terrainHeightTex, ii + vec2i( 0, 1 ), 0 ).x;
 	let d = textureLoad( terrainHeightTex, ii + vec2i( 1, 1 ), 0 ).x;
 	let h = mix( mix( a, b, t.x ), mix( c, d, t.x ), t.y );
-	// outside the domain: deep ocean floor
-	let outside = f.x < 0.0 || f.y < 0.0 || f.x > res - 1.0 || f.y > res - 1.0;
+	// outside the domain: deep ocean floor (any(), not ||: no branch, see WakeSim.js wakeInWindow)
+	let outside = any( ( f < vec2f( 0.0 ) ) | ( f > vec2f( res - 1.0 ) ) );
 	return select( h, -90.0, outside );
 }
 

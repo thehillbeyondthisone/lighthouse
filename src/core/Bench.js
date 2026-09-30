@@ -3,7 +3,7 @@ import { GPU } from '../engine/gpu/GPU.js';
 import { Texture } from '../engine/gpu/Texture.js';
 import { readTexture } from '../engine/gpu/Readback.js';
 import { G } from './Globals.js';
-import { VIEWS } from './DebugViews.js';
+import { VIEWS, applyViewVisibility } from './DebugViews.js';
 
 // Frame-time benchmark (?bench in the URL; console: `await __bench.run()`).
 //
@@ -18,6 +18,56 @@ import { VIEWS } from './DebugViews.js';
 const MAX = 512;
 const _up = new Vector3( 0, 1, 0 );
 const DEFAULT_VIEWS = [ 'beach', 'pier', 'sunGlitter', 'village', 'underwater', 'aerial', 'palms', 'boatFish' ];
+
+// ?bench: the bench for the console (window.__bench) and the job the URL asks for (window.__job, a
+// promise; src/main.js, and tools/shots in Node):
+//   &auto=tag[&runs=n]: reference shots then timings, uploaded (see auto())
+//   &shots=view1,view2[&tag=name][&dt=seconds][&seq=n&every=frames]: reference shots of the named views
+//     only (core/DebugViews.js; dt > 0: the clock runs, e.g. for the eased lens flare)
+//     [&w=px&h=px][&frames=n][&time=hours][&collector=url]: output size, frames per view, one time of
+//     day for every view, where to upload (tools/shots)
+//     [&styles=a,b][&times=h1,h2]: the views once per style (src/style/Styles.js) and per time of day,
+//     named tag[-t<hours>][-<style>]-view
+//   &wdbg=N: the water shader's debug view (WaterMaterial debugMode) in the shots
+//   &ev=stops: exposure offset (with the clock stopped the auto exposure holds its first value)
+//   &adapt: the auto exposure adapts at once every frame (shots at dusk or night exposed as the eye
+//     would be after a while, even with the clock stopped)
+export function startBench( app ) {
+
+	const qs = app.qs;
+	const bench = window.__bench = new Bench( app );
+	const qn = ( k, d ) => ( qs.has( k ) ? Number( qs.get( k ) ) : d );
+	const list = ( k ) => ( qs.has( k ) ? qs.get( k ).split( ',' ) : [ null ] );
+	if ( qs.has( 'wdbg' ) && app.waterMaterial ) app.waterMaterial.debugMode.value = qn( 'wdbg', 0 );
+	if ( qs.has( 'ev' ) ) app.settings.exposure = 0.55 * Math.pow( 2, qn( 'ev', 0 ) );
+	if ( qs.has( 'adapt' ) ) app.post.autoExposure.snap.value = 1;
+	if ( qs.has( 'auto' ) ) window.__job = bench.auto( qs.get( 'auto' ), { runs: qn( 'runs', 1 ) || 1 } );
+	if ( qs.has( 'shots' ) ) {
+
+		const views = qs.get( 'shots' ).split( ',' ), tag = qs.get( 'tag' ) || 'shot';
+		const opts = {
+			dt: qn( 'dt', 0 ), seq: qn( 'seq', 1 ), every: qn( 'every', 1 ), width: qn( 'w', 2560 ), height: qn( 'h', 1267 ),
+			frames: qn( 'frames', 64 ), url: qs.get( 'collector' ) || 'http://127.0.0.1:5190/',
+		};
+		window.__job = ( async () => {
+
+			for ( const time of list( 'times' ) ) for ( const style of list( 'styles' ) ) {
+
+				if ( style ) app.style.set( style );
+				const name = [ tag, time !== null ? 't' + time : '', style || '' ].filter( Boolean ).join( '-' );
+				await bench.shots( views, { ...opts, tag: name, time: time !== null ? Number( time ) : qn( 'time', undefined ) } );
+
+			}
+
+			return tag;
+
+		} )();
+
+	}
+
+	return bench;
+
+}
 
 export class Bench {
 
@@ -182,9 +232,11 @@ export class Bench {
 
 		const v = VIEWS[ name ];
 		if ( v.time !== undefined ) app.settings.timeOfDay = v.time;
+		applyViewVisibility( app, v );
 		app.setFreeCam( true );
 		app.fly.setPose( new Vector3( ...v.p ), v.yaw, v.pitch );
 		app.fly.velocity.set( 0, 0, 0 );
+		if ( app.cameraCut ) app.cameraCut();
 
 	}
 
@@ -280,18 +332,20 @@ export class Bench {
 	// 8-byte width / height header) to `url` + tag-view.bgra. The same sequence on the same code gives
 	// the same images, so a shot before and after a change can be compared pixel by pixel.
 	// dt > 0: the clock runs (animated artefacts: noise the temporal filters don't settle); one image per
-	// `every` frames after the first `frames` is uploaded as tag-view-N.bgra when `seq` > 1
-	async shots( views = DEFAULT_VIEWS, { tag = 'shot', frames = 64, url = 'http://127.0.0.1:5190/', dt = 0, seq = 1, every = 1 } = {} ) {
+	// `every` frames after the first `frames` is uploaded as tag-view-N.bgra when `seq` > 1.
+	// width / height: output size (smaller for software rendering, tools/shots); time: the time of day
+	// for every view instead of each view's own (colour keys)
+	async shots( views = DEFAULT_VIEWS, { tag = 'shot', frames = 64, url = 'http://127.0.0.1:5190/', dt = 0, seq = 1, every = 1, width = 2560, height = 1267, time } = {} ) {
 
 		const app = this.app;
 		app.engine.stop();
-		this.setSize();
-		const { width, height } = app.engine.canvas;
+		this.setSize( width, height );
 		if ( ! this._out || this._out.width !== width || this._out.height !== height ) this._out = new Texture( { width, height, format: GPU.format, usage: [ 'render', 'copySrc', 'sample' ], label: 'bench output' } );
 		G.time.value = 1000;
 		for ( const name of views ) {
 
 			this.pose( name );
+			if ( time !== undefined ) app.settings.timeOfDay = time;
 			app.post.outputTexture = this._out;
 			try {
 

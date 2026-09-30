@@ -6,7 +6,7 @@ import { FullscreenPass } from '../engine/render/FullscreenPass.js';
 import { FrameUniforms, G, setFrameCamera } from '../engine/render/Frame.js';
 import { LENS_REACH } from './Underwater.js';
 import { commonModule } from '../engine/render/wgsl/common.js';
-import { Matrix4, Vector2, Vector3 } from '../engine/math/index.js';
+import { Matrix4, Vector2, Vector3, Vector4 } from '../engine/math/index.js';
 import { GTAO } from './GTAO.js';
 import { AntiAlias } from './AntiAlias.js';
 import { TemporalUpscale } from './TemporalUpscale.js';
@@ -79,6 +79,19 @@ export class PostFX {
 			warmth: [ 'f32', 0.02 ],
 			grain: [ 'f32', 0.012 ],
 			sharpen: [ 'f32', 0.45 ], // RCAS strength (0 = off, 1 = strong)
+			// ---- Style Lab grade after the tone curve (src/style/StyleDirector.js sets these):
+			// 0 none, 1 lift / gamma / gain + saturation, 2 a print process (albumen, cyanotype)
+			gradeMode: [ 'f32', 0 ],
+			gradeLift: [ 'vec4f', new Vector4( 0, 0, 0, 0 ) ],
+			gradeGamma: [ 'vec4f', new Vector4( 1, 1, 1, 0 ) ],
+			gradeGain: [ 'vec4f', new Vector4( 1, 1, 1, 1 ) ], // w: saturation
+			printResponse: [ 'vec4f', new Vector4( 0.06, 0.34, 0.6, 1.15 ) ], // film sensitivity per channel, w: contrast
+			printDark: [ 'vec4f', new Vector4() ], // toning, display linear: shadows, mid-tones, paper
+			printMid: [ 'vec4f', new Vector4() ],
+			printLight: [ 'vec4f', new Vector4() ],
+			printHalation: [ 'vec4f', new Vector4() ], // w: strength
+			printFx: [ 'vec4f', new Vector4() ], // x lens swirl, y vignette, z paper texture, w dust
+			printFx2: [ 'vec4f', new Vector4() ], // x grain, y print exposure (stops)
 		}, { label: 'post' } );
 		this.params = this.uniforms.fields;
 
@@ -90,6 +103,7 @@ export class PostFX {
 			max: [ 'f32', 6.0 ],
 			up: [ 'f32', 1.6 ], // adaptation rates (1/s): brightening, darkening
 			down: [ 'f32', 1.1 ],
+			snap: [ 'f32', 0 ], // 1: adapt at once (reference shots with the clock stopped, ?bench&adapt)
 		}, { label: 'autoExposure' } );
 		// (`ref` is a WGSL keyword: the field is refLum, aliased as autoExposure.ref)
 		this.autoExposure = { ...this.aeUniforms.fields, ref: this.aeUniforms.fields.refLum };
@@ -445,7 +459,7 @@ ${ reduce }
 		let tgt = clamp( partial, ae.min, mix( ae.max, 2.0, frame.night ) );
 		let cur = aeExposure[ 0 ];
 		let rate = select( ae.down, ae.up, tgt > cur );
-		let k = 1.0 - exp( - frame.dt * rate );
+		let k = select( 1.0 - exp( - frame.dt * rate ), 1.0, ae.snap > 0.5 );
 		let next = exp2( mix( log2( max( cur, 1e-3 ) ), log2( tgt ), k ) );
 		aeExposure[ 0 ] = select( 1.0, next, ae.enabled > 0.5 );
 	}
@@ -514,9 +528,62 @@ ${ this.flare ? '	c += flareLight( uv );' : '' }
 }
 fn lensBlurred( uv: vec2f ) -> vec3f { return textureSampleLevel( postHalf, smpLinearClamp, uv, 0.0 ).rgb + bloomAt( uv ); }
 
+// ---- Style Lab grades (post.gradeMode, set by src/style/StyleDirector.js)
+
+// 1: lift / gamma / gain per channel, then saturation, on the display-linear image
+fn posterGrade( t: vec3f ) -> vec3f {
+	var g = t * post.gradeGain.rgb + post.gradeLift.rgb * ( 1.0 - t );
+	g = pow( max( g, vec3f( 0.0 ) ), 1.0 / max( post.gradeGamma.rgb, vec3f( 0.01 ) ) );
+	return sat3( mix( vec3f( luminance( g ) ), g, post.gradeGain.w ) );
+}
+
+// 2: a print of 1900 (albumen, cyanotype), from the exposed HDR image cLens:
+//   lens      a Petzval portrait lens swirls and softens toward the edges (tangential blur)
+//   emulsion  blue-sensitive: exposure weights the channels by printResponse (skies burn white,
+//             reds print dark), plus halation, a glow around highlights (the bloom)
+//   tone      the game's tone curve on grey, then a print's S-curve (printResponse.w)
+//   print     fall-off burned into the corners, paper tooth and fibres, dust and scratch specks
+//             fixed on the print, grain; toned from printDark through printMid to printLight
+fn printProcess( cLens: vec3f, uv: vec2f, px: vec2u, fi: u32 ) -> vec3f {
+	let aspect = frame.outputResolution.x / max( frame.outputResolution.y, 1.0 );
+	let d = uv - 0.5;
+	let r = length( d * vec2f( aspect, 1.0 ) ) / length( vec2f( aspect, 1.0 ) * 0.5 );
+	var c = cLens;
+	let k = post.printFx.x * smoothstep( 0.25, 0.95, r );
+	if ( k > 0.01 ) {
+		// tangential direction in uv (screen space ( -y, x ) scaled back by the aspect)
+		let tu = vec2f( - d.y / aspect, d.x * aspect ) * 0.05 * k;
+		var acc = vec3f( 0.0 );
+		for ( var i = -3; i <= 3; i++ ) { acc += textureSampleLevel( postResolved, smpLinearClamp, uv + tu * ( f32( i ) / 3.0 ), 0.0 ).rgb; }
+		c = mix( c, ( acc / 7.0 + bloomAt( uv ) ) * postExposure[ 0 ], sat( k * 1.5 ) );
+	}
+	let resp = post.printResponse.rgb / max( dot( post.printResponse.rgb, vec3f( 1.0 ) ), 1e-4 );
+	let L = ( dot( c, resp ) + luminance( textureSampleLevel( postBloom, smpLinearClamp, uv, 0.0 ).rgb ) * post.printHalation.w * postExposure[ 0 ] ) * exp2( post.printFx2.y );
+	var y = acesFilmicToneMapping( vec3f( L ), frame.exposure ).g;
+	y = mix( y, y * y * ( 3.0 - 2.0 * y ), sat( ( post.printResponse.w - 1.0 ) * 2.0 ) );
+	y *= 1.0 - post.printFx.y * smoothstep( 0.45, 1.05, r ) * 0.75;
+	let pa = uv * vec2f( aspect, 1.0 );
+	let paper = ( mx_noise_float2( pa * 140.0 ) * 0.5 + mx_noise_float2( pa * 900.0 ) * 0.35 ) * post.printFx.z * 0.06;
+	y = sat( y + paper * ( 0.4 + y ) );
+	let cellN = vec2f( 70.0 * aspect, 70.0 );
+	let cell = floor( uv * cellN );
+	let h = hash21( cell );
+	if ( h > 1.0 - 0.02 * post.printFx.w ) {
+		let pos = hash22( cell + 3.7 ) * 0.6 + 0.2;
+		let rad = 0.05 + hash21( cell + 9.1 ) * 0.12;
+		// mostly white (dust on the negative), a few dark (on the print)
+		y = mix( y, select( 0.95, 0.05, h > 1.0 - 0.006 * post.printFx.w ), smoothstep( rad, rad * 0.4, length( fract( uv * cellN ) - pos ) ) * 0.8 );
+	}
+	let n = ( postHash( px, fi ) + postHash( px + vec2u( 311u, 7717u ), fi ) - 1.0 ) * 0.5;
+	y = sat( y + n * post.printFx2.x );
+	let lo = mix( post.printDark.rgb, post.printMid.rgb, smoothstep( 0.0, 0.5, y ) );
+	return mix( lo, post.printLight.rgb, smoothstep( 0.45, 1.0, y ) );
+}
+
 fn fragment( in: FSIn ) -> vec4f {
 	let uv = in.uv;
-	var c = lensDroplets( uv ) * postExposure[ 0 ];
+	let cLens = lensDroplets( uv ) * postExposure[ 0 ];
+	var c = cLens;
 	// white balance nudge + saturation + contrast around mid grey (in linear HDR)
 	c = c * vec3f( 1.0 + post.warmth, 1.0, 1.0 - post.warmth );
 	let l = luminance( c );
@@ -533,7 +600,9 @@ fn fragment( in: FSIn ) -> vec4f {
 	let n = ( postHash( px, fi ) + postHash( px + vec2u( 7919u, 104729u ), fi ) - 1.0 ) * 0.5;
 	c = c + c * ( n * post.grain );
 	// renderOutput: ACES filmic tone mapping with the exposure, sRGB transfer
-	let t = acesFilmicToneMapping( c, frame.exposure );
+	var t = acesFilmicToneMapping( c, frame.exposure );
+	if ( post.gradeMode > 1.5 ) { t = printProcess( cLens, uv, px, fi ); }
+	else if ( post.gradeMode > 0.5 ) { t = posterGrade( t ); }
 	// +-1 LSB triangular dither before the 8-bit output: no banding in the sky gradients
 	let dq = ( postHash( px + vec2u( 31337u, 271u ), fi ) + postHash( px + vec2u( 1013u, 65537u ), fi ) - 1.0 ) / 255.0;
 	return vec4f( linearToSrgb( t ) + vec3f( dq ), 1.0 );
@@ -600,6 +669,16 @@ fn fragment( in: FSIn ) -> vec4f {
 	setBloom( v ) {
 
 		this.params.bloom.value = v;
+
+	}
+
+	// a camera cut (a review view, a teleport): the temporal passes start over, so nothing of the last
+	// shot lingers in still pixels (the upscaler keeps the history of pixels whose shading holds)
+	cut() {
+
+		if ( this.taau ) this.taau._needsRestart = true;
+		if ( this.motionBlur ) this.motionBlur._hasPrev = false;
+		this._hasPrev = false;
 
 	}
 

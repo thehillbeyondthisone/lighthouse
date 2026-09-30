@@ -37,6 +37,9 @@ fn causticsSampleShaft( P: vec3f, depth: f32, level: f32, detailK: f32 ) -> vec3
 fn causticsSampleLevel( p: vec3f, z: f32, k: f32 ) -> vec3f { let a = sin( p.x * 2.1 + p.z * 0.7 ) * sin( p.z * 2.3 - p.x * 0.4 ); return vec3f( 1.0 + 1.5 * a * a * a * a - 0.3 ); }
 ` } ) };
 let atmosphere = { module: new ShaderModule( { name: 'atmosphere', code: /* wgsl */`
+// the true sun (the style fog's sun-side ramp reads it)
+struct AtmosphereStubParams { sunDir: vec3f };
+const atmosphereParams = AtmosphereStubParams( vec3f( 0.0, 1.0, 0.0 ) );
 fn atmosphereSkyLuminance( dir: vec3f ) -> vec3f {
 	let t = pow( 1.0 - max( dir.y, 0.0 ), 3.0 );
 	let sunGlow = pow( max( dot( dir, frame.sunDir ), 0.0 ), 16.0 ) * vec3f( 1.2, 0.8, 0.5 );
@@ -158,6 +161,16 @@ if ( mode === 'noao' ) post.params.aoStrength.value = 0;
 if ( mode !== 'motion' ) post.motionBlur.shutter.value = 0.5;
 const profiler = new Profiler( engine, { enabled: true } );
 profiler.debugRaw = !! process.env.RAW;
+// STYLE=poster | albumen | cyanotype: the Style Lab's director drives the frame's style uniforms and
+// the grade (src/style); best with REAL_SKY for the painted sky and clouds
+let style = null;
+if ( process.env.STYLE ) {
+
+	const { StyleDirector } = await import( '../src/style/StyleDirector.js' );
+	style = new StyleDirector( { post, settings: { exposure: 1 }, atmosphere: realApp ? atmosphere : { sunDir: { value: G.sunDir.value } } } );
+	style.set( process.env.STYLE );
+
+}
 
 const FRAMES = Number( process.env.FRAMES || ( REAL !== null ? 40 : 24 ) );
 let t = 0;
@@ -202,6 +215,7 @@ for ( let f = 0; f < FRAMES; f ++ ) {
 
 	}
 
+	if ( style ) style.update();
 	post.beginFrame();
 	if ( first ) {
 
@@ -216,6 +230,7 @@ for ( let f = 0; f < FRAMES; f ++ ) {
 	sceneRenderer.render();
 	if ( post.flare ) post.flare.kernel.dispatch( 1 );
 	post.render();
+	if ( style ) style.afterRender();
 	post.endFrame();
 	if ( f === FRAMES - 3 ) profiler._record();
 	GPU.submit();

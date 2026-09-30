@@ -44,10 +44,16 @@ export class Sky {
 			moonDir: [ 'vec3f', new Vector3( - 0.3, 0.5, 0.8 ).normalize() ],
 			sunDiskIntensity: [ 'f32', 1 ],
 			starIntensity: [ 'f32', 0 ],
+			// 1: the moon disc shows its phase (lit by the true sun, src/sky/Setting.js); 0: a full disc
+			moonShade: [ 'f32', 0 ],
+			// brightness of the moonlit sky (the moon's illuminated fraction; 1 = full)
+			moonLight: [ 'f32', 1 ],
 		}, { label: 'sky' } );
 		this.sunDiskIntensity = this.params.fields.sunDiskIntensity;
 		this.moonDir = this.params.fields.moonDir;
 		this.starIntensity = this.params.fields.starIntensity;
+		this.moonShade = this.params.fields.moonShade;
+		this.moonLight = this.params.fields.moonLight;
 		this._module = null;
 		this._background = null;
 
@@ -66,7 +72,7 @@ export class Sky {
 		const deps = [ commonModule, this.atmosphere.module ];
 		if ( clouds ) deps.push( clouds.module );
 		const composite = ( sampler ) => clouds
-			? `let c = ${ sampler }( dir );\n\treturn base * c.a + c.rgb;`
+			? `let c = skyStyleClouds( ${ sampler }( dir ), dir );\n\treturn base * c.a + c.rgb;`
 			: 'return base;';
 
 		return new ShaderModule( {
@@ -92,7 +98,44 @@ fn skySunDisk( dir: vec3f ) -> vec3f {
 	let limb = 1.0 - 0.6 * ( 1.0 - mu );
 	let T = atmosphereTransmittanceToSpace( dir );
 	// physically the disk radiance is E / solid angle (~1.6e5); clamp for fp16 targets
-	return T * mask * limb * 2500.0 * skyParams.sunDiskIntensity * smoothstep( -0.02, 0.0, dir.y );
+	let physical = T * mask * limb * 2500.0 * skyParams.sunDiskIntensity * smoothstep( -0.02, 0.0, dir.y );
+	if ( frame.styleMix.y <= 0.0 ) { return physical; }
+	// Style Lab: a flat, slightly larger disc in the glow colour
+	let disc = styleScene( frame.styleSkyGlow.rgb ) * 3.0 * smoothstep( 1.6, 1.3, r ) * smoothstep( -0.02, 0.0, dir.y );
+	return mix( physical, disc, frame.styleMix.y );
+}
+
+// ---- Style Lab (src/style/StyleDirector.js, frame.style*)
+
+// a painted sky: horizon to zenith by elevation (exponent < 1 keeps more horizon colour), with a glow
+// around the true sun; below the horizon the horizon colour
+fn skyStyleGradient( dir: vec3f ) -> vec3f {
+	let g = pow( sat( dir.y ), max( frame.styleSkyZenith.w, 0.05 ) );
+	let col = mix( frame.styleSkyHorizon.rgb, frame.styleSkyZenith.rgb, g );
+	let ang = acos( clamp( dot( dir, atmosphereParams.sunDir ), -1.0, 1.0 ) );
+	let glow = exp( - ang / max( frame.styleSkyGlow.w, 0.02 ) ) * smoothstep( -0.3, 0.02, atmosphereParams.sunDir.y );
+	// (sRGB colours, blended as painted: common.js styleScene)
+	return styleScene( mix( col, frame.styleSkyGlow.rgb, glow ) );
+}
+
+// clouds cut into a few flat layers: the cover (1 - transmittance) rounded to levels with soft
+// steps, each cloud painted in the lit or the shaded colour by how much brighter than the clear sky
+// behind it the physical cloud is (lit tops and edges vs grey undersides)
+fn skyStyleClouds( c: vec4f, dir: vec3f ) -> vec4f {
+	let k = frame.styleMix.w;
+	if ( k <= 0.0 ) { return c; }
+	let cover = 1.0 - c.a;
+	let levels = max( frame.styleCloudLit.w, 1.0 );
+	let s = clamp( frame.styleCloudShade.w * levels, 0.005, 0.5 );
+	let y = cover * levels;
+	// near the horizon the flat clouds dissolve into the painted gradient (low clouds foreshortened into
+	// a band of flat blocks otherwise)
+	let q = sat( ( floor( y ) + smoothstep( 0.5 - s, 0.5 + s, fract( y ) ) ) / levels ) * smoothstep( 0.03, 0.2, dir.y );
+	let ratio = luminance( c.rgb ) / max( cover, 1e-3 ) / max( luminance( atmosphereSkyLuminance( dir ) ), 1e-6 );
+	// two tones: lit where the cloud is clearly brighter than the sky behind it (a wide edge: near a low
+	// sun the ratio is noisy, and a narrow one turns the noise into speckles)
+	let col = styleScene( mix( frame.styleCloudShade.rgb, frame.styleCloudLit.rgb, smoothstep( 0.8, 1.6, ratio ) ) );
+	return mix( c, vec4f( col * q, 1.0 - q ), k );
 }
 
 // Stars: one candidate per cell of a cube-face grid, jittered inside it, with a power law
@@ -140,7 +183,18 @@ fn skyMoon( dir: vec3f ) -> vec3f {
 	let ang = acos( clamp( cosA, -1.0, 1.0 ) );
 	let r = ang / 0.0048;
 	let mask = smoothstep( 1.0, 0.92, r );
-	return vec3f( 0.9, 0.92, 1.0 ) * mask * 3.0 * skyParams.starIntensity * smoothstep( -0.02, 0.02, dir.y );
+	var lit = 1.0;
+	if ( skyParams.moonShade > 0.5 && mask > 0.0 ) {
+		// the phase: the moon as a sphere lit by the true sun. The disc point's normal faces back toward
+		// the observer (-moonDir) and leans out along its offset from the disc centre; a faint
+		// earthshine keeps the dark limb just visible
+		let t = dir - skyParams.moonDir * cosA;
+		let tl = length( t );
+		let rr = min( r, 1.0 );
+		let n = select( vec3f( 0.0 ), t / tl, tl > 1e-7 ) * rr - skyParams.moonDir * sqrt( 1.0 - rr * rr );
+		lit = smoothstep( -0.04, 0.06, dot( n, atmosphereParams.sunDir ) ) + 0.015;
+	}
+	return vec3f( 0.9, 0.92, 1.0 ) * mask * lit * 3.0 * skyParams.starIntensity * smoothstep( -0.02, 0.02, dir.y );
 }
 
 // Faint blue-grey moonlit sky (a little brighter toward the horizon) and the moon's aureole.
@@ -151,13 +205,15 @@ fn skyMoonSky( dir: vec3f ) -> vec3f {
 	let aureole = exp( ang * -14.0 ) * 2.4 + exp( ang * -2.5 ) * 0.9;
 	let grad = mix( 1.7, 1.0, sat( dir.y * 3.0 ) );
 	let up = smoothstep( -0.05, 0.15, skyParams.moonDir.y );
-	return vec3f( 0.005, 0.0068, 0.0105 ) * ( grad + aureole ) * frame.night * up;
+	return vec3f( 0.005, 0.0068, 0.0105 ) * ( grad + aureole ) * frame.night * up * skyParams.moonLight;
 }
 
 // Everything behind the clouds except the sun and moon disks. The night terms are only
-// evaluated at night (uniform branch).
+// evaluated at night (uniform branch). Style Lab: the painted gradient over the atmosphere (the
+// environment probe renders this too, so the ambient light follows the painted sky).
 fn skyBackground( dir: vec3f, starK: f32 ) -> vec3f {
 	var L = atmosphereSkyLuminance( dir );
+	if ( frame.styleMix.y > 0.0 ) { L = mix( L, skyStyleGradient( dir ), frame.styleMix.y ); }
 	if ( skyParams.starIntensity > 0.001 ) {
 		L += skyMoonSky( dir ) + skyStars( dir ) * starK;
 	}
@@ -192,7 +248,7 @@ fn skyReflectionRadiance( dir: vec3f ) -> vec3f {
 fn skyViewRadiance( dir: vec3f ) -> vec3f {
 	let base = skyBackground( dir, 1.0 ) + skyMoon( dir );
 	let sun = skySunDisk( dir );
-	${ clouds ? `let c = cloudsSampleView( dir );
+	${ clouds ? `let c = skyStyleClouds( cloudsSampleView( dir ), dir );
 	return base * c.a + sun * cloudsSunTransmittance( c.a ) + c.rgb;` : 'return base + sun;' }
 }
 `,

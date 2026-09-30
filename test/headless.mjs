@@ -1,51 +1,30 @@
 // Headless WebGPU (Dawn via the `webgpu` npm package) for engine tests.
 import { create, globals } from 'webgpu';
-import { writeFileSync } from 'node:fs';
-import { deflateSync } from 'node:zlib';
 
 Object.assign( globalThis, globals );
 Object.defineProperty( globalThis, 'navigator', { value: { gpu: create( [] ) }, configurable: true } );
 globalThis.location = { search: '' };
 
-// minimal RGBA8 PNG writer
-export function writePNG( path, width, height, rgba ) {
+// WEBGPU_DEFAULT_LIMITS=1: the adapter reports WebGPU's default limits (16 sampled and 4 storage
+// textures per stage, ...), as software renderers and some mobile GPUs do: the engine must run there
+if ( process.env.WEBGPU_DEFAULT_LIMITS ) {
 
-	const crcTable = new Int32Array( 256 ).map( ( _, n ) => {
+	const DEFAULTS = {
+		maxSampledTexturesPerShaderStage: 16, maxStorageTexturesPerShaderStage: 4, maxStorageBuffersPerShaderStage: 8,
+		maxSamplersPerShaderStage: 16, maxUniformBuffersPerShaderStage: 12, maxBindingsPerBindGroup: 1000,
+		maxColorAttachmentBytesPerSample: 32, maxComputeWorkgroupStorageSize: 16384,
+	};
+	const gpu = navigator.gpu, request = gpu.requestAdapter.bind( gpu );
+	gpu.requestAdapter = async ( o ) => {
 
-		let c = n;
-		for ( let k = 0; k < 8; k ++ ) c = c & 1 ? 0xedb88320 ^ ( c >>> 1 ) : c >>> 1;
-		return c;
-
-	} );
-	const crc = ( buf ) => {
-
-		let c = - 1;
-		for ( const b of buf ) c = crcTable[ ( c ^ b ) & 255 ] ^ ( c >>> 8 );
-		return ( c ^ - 1 ) >>> 0;
+		const a = await request( o );
+		if ( ! a ) return a;
+		const limits = new Proxy( a.limits, { get: ( l, k ) => ( k in DEFAULTS ? Math.min( DEFAULTS[ k ], l[ k ] ) : l[ k ] ) } );
+		return new Proxy( a, { get: ( t, k ) => ( k === 'limits' ? limits : typeof t[ k ] === 'function' ? t[ k ].bind( t ) : t[ k ] ) } );
 
 	};
-	const chunk = ( type, data ) => {
-
-		const out = Buffer.alloc( 12 + data.length );
-		out.writeUInt32BE( data.length, 0 );
-		out.write( type, 4, 'ascii' );
-		data.copy( out, 8 );
-		out.writeUInt32BE( crc( out.subarray( 4, 8 + data.length ) ), 8 + data.length );
-		return out;
-
-	};
-	const raw = Buffer.alloc( ( width * 4 + 1 ) * height );
-	for ( let y = 0; y < height; y ++ ) {
-
-		raw[ y * ( width * 4 + 1 ) ] = 0;
-		Buffer.from( rgba.buffer, rgba.byteOffset + y * width * 4, width * 4 ).copy( raw, y * ( width * 4 + 1 ) + 1 );
-
-	}
-
-	const ihdr = Buffer.alloc( 13 );
-	ihdr.writeUInt32BE( width, 0 );
-	ihdr.writeUInt32BE( height, 4 );
-	ihdr[ 8 ] = 8; ihdr[ 9 ] = 6;
-	writeFileSync( path, Buffer.concat( [ Buffer.from( [ 137, 80, 78, 71, 13, 10, 26, 10 ] ), chunk( 'IHDR', ihdr ), chunk( 'IDAT', deflateSync( raw ) ), chunk( 'IEND', Buffer.alloc( 0 ) ) ] ) );
 
 }
+
+// the PNG writer lives with the screenshot tool (tools/shots), which runs without Dawn
+export { writePNG } from '../tools/shots/png.mjs';

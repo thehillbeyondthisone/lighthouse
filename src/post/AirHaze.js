@@ -48,6 +48,10 @@ const SS_GAIN = 3.5;
 const MARINE = { sigma: 1.5e-4, H: 110 };
 const AEROSOL = { sigma: 3.2e-5, H: 1400 };
 
+// the haze density that gives a visibility of `km` at sea level (Koschmieder: 3.912 / extinction);
+// the default density 1.6 is about 13 km
+export const hazeDensityForVisibility = ( km ) => 3.912 / ( ( MARINE.sigma + AEROSOL.sigma ) * Math.max( km, 0.05 ) * 1000 );
+
 const f = ( x ) => {
 
 	const s = String( x );
@@ -240,6 +244,14 @@ fn hazeLayerDepth( sigma: f32, H: f32, hc: f32, vy: f32, d: f32 ) -> f32 {
 	return base * fk;
 }
 
+// The ray's vertical direction component as the haze layers see it. The Earth's curvature (common.js
+// curvatureDrop) lowers far geometry below the camera's horizontal plane, but the air's layers follow
+// the curved surface: adding the drop back keeps a far coast in the air it stands in (otherwise its
+// foot sinks into a marine layer far denser than at sea level and turns into a bright band).
+fn hazeVy( dir: vec3f, dist: f32 ) -> f32 {
+	return dir.y + dist * dot( dir.xz, dir.xz ) * frame.curvature.x;
+}
+
 // unshadowed in-scatter depth of both layers from height hc along a ray (direction y component vy)
 // over distance d: 1 - their transmittance
 fn hazeInScatter( hc: f32, vy: f32, d: f32 ) -> f32 {
@@ -335,6 +347,28 @@ fn hazeVisibility( P: vec3f ) -> f32 {
 				hazeMedium: { texture: () => this.mediumTexture || this.low.texture },
 			},
 			code: /* wgsl */`
+// Style Lab (src/style/StyleDirector.js, frame.style*): fog from colour ramps, the Firewatch way. The
+// colour runs from the near to the far colour across a distance window (styleFogShape x..y); looking
+// toward the sun's azimuth it blends into a second, sun-side ramp (styleFogShape2.y at most). The
+// opacity rises across the same window with a gamma (z) up to styleFogShape2.x, thinning with the
+// ray's mean height above the sea (w: scale height). Distant land and sea turn into flat colour
+// with clean silhouettes; the near ground keeps its own.
+fn styleFogApply( c: vec3f, dist: f32, dir: vec3f, camH: f32 ) -> vec3f {
+	let sh = frame.styleFogShape;
+	let t = sat( ( dist - sh.x ) / max( sh.y - sh.x, 1.0 ) );
+	let sunXZ = atmosphereParams.sunDir.xz;
+	let toward = dot( normalize( dir.xz + vec2f( 1e-6, 0.0 ) ), sunXZ / max( length( sunXZ ), 1e-6 ) ) * 0.5 + 0.5;
+	let k = pow( toward, 3.0 ) * frame.styleFogShape2.y;
+	let col = mix( mix( frame.styleFogNear.rgb, frame.styleFogFar.rgb, t ), mix( frame.styleFogSunNear.rgb, frame.styleFogSunFar.rgb, t ), k );
+	let meanH = max( camH + ( dir.y + dist * dot( dir.xz, dir.xz ) * frame.curvature.x ) * dist * 0.5, 0.0 );
+	let a = frame.styleFogShape2.x * pow( t, max( sh.z, 0.05 ) ) * exp( - meanH / max( sh.w, 1.0 ) );
+	// blended as paint, in sRGB display colours (the ramp's colours and opacity read as authored:
+	// common.js styleScene), plus whatever of the scene colour lies beyond the curve's clamp (sun
+	// glints stay bright)
+	let d = stylePaint( c );
+	return c + styleScene( mix( d, col, a ) ) - styleScene( d );
+}
+
 // c: the scene colour at uv. Returns the hazed colour.
 //   geometry: c T + (1 - T) fog (1 - fSun (1 - h)) + (1 - h) E p(θ) lit - h fSun fog (all - lit)
 //   sky:      c - fSun fog (all - lit)
@@ -371,9 +405,12 @@ fn hazeApply( uv: vec2f, c: vec4f ) -> vec4f {
 
 			// ---- aerial perspective / marine haze on geometry (the water surface included)
 			if ( ! sky ) {
-				let tau = ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, camH, dir.y, dist ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, camH, dir.y, dist ) ) * hazeParams.density;
+				let vy = hazeVy( dir, dist );
+				let tau = ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, camH, vy, dist ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, camH, vy, dist ) ) * hazeParams.density;
 				let T = exp( - tau );
 				out = out * T + fog * ( 1.0 - T ) * ( 1.0 - fSun * ( 1.0 - h ) );
+				// Style Lab: the ramp fog in place of the aerial perspective
+				if ( frame.styleMix.x > 0.0 ) { out = mix( out, styleFogApply( c.rgb, dist, dir, camH ), frame.styleMix.x ); }
 			}
 
 			// ---- sun shafts: depth-aware upsample of the half resolution march

@@ -43,7 +43,8 @@ const VILLAGE = WORLD.village.center;
 //            rubble, then the rock / sand / path / gully masks
 export class TerrainData {
 
-	constructor( seed = 7 ) {
+	// generate: false leaves the grids empty (a subclass fills them: src/world/flannan/FlannanTerrain.js)
+	constructor( seed = 7, { generate = true } = {} ) {
 
 		this.size = WORLD.terrainSize;
 		this.res = RES;
@@ -67,6 +68,7 @@ export class TerrainData {
 		this.timings = {};
 		this._F = { wx: 0, wz: 0, f170: 0, und: 0, deep: 0, E: 0, gx: 0, gz: 0 };
 		this._out = { h: 0, rock: 0, d: 0, bz: 0, carve: 0 };
+		if ( ! generate ) return;
 		this.generate();
 		this.buildMinMax();
 

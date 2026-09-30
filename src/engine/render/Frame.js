@@ -58,6 +58,29 @@ const FRAME_FIELDS = {
 	pad0: [ 'f32', 0 ],
 	// free slots for experiments / debug views
 	debug: [ 'vec4f', new Vector4() ],
+	// the Earth's curvature (wgsl/common.js curvatureDrop): x = 1 / ( 2 R_eff ) (0: a flat world), yz the
+	// main camera's xz, which every view drops the world below (shadow cascades included)
+	curvature: [ 'vec4f', new Vector4() ],
+
+	// ---- the active style (src/style/StyleDirector.js writes these every frame; all zero = photoreal,
+	// and every style branch in the shaders is skipped). Colours are sRGB display colours, blended as
+	// paint and converted to scene radiance in the shaders (wgsl/common.js styleScene).
+	styleMix: [ 'vec4f', new Vector4() ], // x fog, y sky, z light bands, w flat clouds (0..1 each)
+	styleFogNear: [ 'vec4f', new Vector4() ], // fog colour near / far along the ramp, away from the sun
+	styleFogFar: [ 'vec4f', new Vector4() ],
+	styleFogSunNear: [ 'vec4f', new Vector4() ], // ... and toward the sun
+	styleFogSunFar: [ 'vec4f', new Vector4() ],
+	styleFogShape: [ 'vec4f', new Vector4() ], // x ramp start (m), y ramp end (m), z opacity gamma, w height scale (m)
+	styleFogShape2: [ 'vec4f', new Vector4() ], // x opacity at the far end, y sun-side blend (0..1)
+	styleSkyZenith: [ 'vec4f', new Vector4() ], // rgb, w: gradient exponent (< 1: more horizon colour)
+	styleSkyHorizon: [ 'vec4f', new Vector4() ],
+	styleSkyGlow: [ 'vec4f', new Vector4() ], // rgb around the sun, w: glow angular width (rad)
+	styleCloudLit: [ 'vec4f', new Vector4() ], // rgb, w: cover levels
+	styleCloudShade: [ 'vec4f', new Vector4() ], // rgb, w: level edge softness
+	styleLight: [ 'vec4f', new Vector4() ], // x bands, y band softness, z wrap, w specular scale
+	styleShadowTint: [ 'vec4f', new Vector4() ], // rgb hue multiplier of the indirect light, w amount
+	styleSunTint: [ 'vec4f', new Vector4() ], // rgb hue multiplier of the key light, w amount
+	styleLight2: [ 'vec4f', new Vector4() ], // x gamma of the sun's N.L before banding (< 1: a low sun still reaches the upper bands), y exposure of the final pass (for styleScene)
 };
 
 const CAMERA_FIELDS = [ 'view', 'proj', 'viewProj', 'invView', 'invProj', 'invViewProj', 'viewProjNoJitter', 'prevViewProjNoJitter',
