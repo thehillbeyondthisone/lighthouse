@@ -281,6 +281,12 @@ fn linearToSrgb( c: vec3f ) -> vec3f {
 // radiance a bright colour swamps a dim one; in linear light cream and slate blue mix to a warm
 // grey), then come back to scene radiance through the inverse curve: styleScene( paint ).
 fn styleScene( srgb: vec3f ) -> vec3f { return styleToScene( srgbToLinear( srgb ) ); }
+// How far the Earth's surface at world xz lies below the main camera's horizontal plane (refraction
+// included): 84 m at 35 km. Zero in a flat world (frame.curvature.x = 0: Tidewater).
+fn curvatureDrop( xz: vec2f ) -> f32 {
+	let d = xz - frame.curvature.yz;
+	return dot( d, d ) * frame.curvature.x;
+}
 // scene radiance -> the sRGB display colour it will show as
 fn stylePaint( c: vec3f ) -> vec3f { return linearToSrgb( styleToDisplay( c ) ); }
 fn styleToDisplay( c: vec3f ) -> vec3f {

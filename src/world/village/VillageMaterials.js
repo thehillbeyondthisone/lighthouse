@@ -520,7 +520,8 @@ fn vlmGlass( uvm: vec2f, aTint: vec3f, seed: f32, kind: f32, lit: f32 ) -> VlmGl
 // ---------------------------------------------------------------------------
 // STONE: rubble masonry, lime plaster over stone, sand dusted near the ground
 // uv in metres (u horizontal, v vertical from the bottom of the piece).
-// vdata: x seed, y style (0 coursed rubble, 1 plaster over stone, 2 small rubble)
+// vdata: x seed, y style (0 coursed rubble, 1 plaster over stone, 2 small rubble), z plaster cover
+// (added to the survival field: 0 weathered, 0.25 whole), w splash near the ground (0 sand, 1 peat)
 // tint: plaster colour
 
 export function createStoneMaterial( T ) {
@@ -546,7 +547,7 @@ export function createStoneMaterial( T ) {
 	let PA = textureSample( vlgGrime, smpAnisoRepeat, puv * 0.5 );
 
 	// plaster survives where the baked plaster field is high; the plaster edge has thickness
-	let pf = A.a + ( PA.a - 0.5 ) * 0.12;
+	let pf = A.a + ( PA.a - 0.5 ) * 0.12 + aData.z;
 	let pm = smoothstep( 0.3, 0.33, pf ) * isPlaster;
 	let e = 1.0 / 1024.0;
 	let gX = textureSample( vlgStoneA, smpAnisoRepeat, tuv + vec2f( e, 0.0 ) ).a - textureSample( vlgStoneA, smpAnisoRepeat, tuv - vec2f( e, 0.0 ) ).a;
@@ -560,7 +561,7 @@ export function createStoneMaterial( T ) {
 	// sand dust and splash dirt near the ground
 	let low = 1.0 - smoothstep( 0.05, 0.75, uvS.y );
 	let dust = low * smoothstep( 0.25, 0.7, PA.a ) * 0.8;
-	col = mix( col, vec3f( 0.46, 0.4, 0.3 ), dust );
+	col = mix( col, mix( vec3f( 0.46, 0.4, 0.3 ), vec3f( 0.2, 0.21, 0.15 ), aData.w ), dust );
 	col = col * ( 1.0 - low * 0.18 );
 
 	let sl = mix( vlmSlopeOf( N ), vlmSlopeOf( PN ) * 2.5, pm ) + vec2f( gX, gY ) * pEdge * - 6.0;

@@ -597,6 +597,14 @@ shaders" and can take a minute or more.
   - sketch the seabed from the Admiralty chart's soundings.
 - **Layout:** `WORLD` (`src/world/WorldLayout.js:6`) swaps the pier, boat dock, village, reef and beach for
   the east and west landings, the station, the chapel and the bothies. You arrive at the east landing.
+- **Built (29 September).** The data plan changed: the Copernicus GLO-30 DEM turned out to be reachable
+  from the cloud container (S3), and good enough for the island's shape at 30 m. So:
+  - `tools/terrain/flannan.mjs` bakes it, with the seabed from the terrarium tiles and Lewis, Harris and
+    St Kilda for the far shore;
+  - `src/world/flannan/FlannanTerrain.js` upsamples it and cuts the cliffs and the landing geos
+    procedurally (see `HISTORY.md`);
+  - OSM and OS data were not needed;
+  - the chart soundings and the station plans are still wanted, for the details.
 
 ### 5.3 The lighthouse complex
 
@@ -611,6 +619,16 @@ shaders" and can take a minute or more.
 | Bothies | beehive ruins on Maol nam Both | kit parts |
 | Signal mast and boards | for the day code (a plausible fiction) | kit parts |
 | Tanks and stores | water tanks, store sheds | kit parts |
+
+Built so far (`src/world/flannan/Station.js`, docs in `HISTORY.md`):
+- the tower's outside;
+- the keepers' house (outside), the boundary wall and gatepiers, and an oil store;
+- both landings, with stages, flights, railings, cranes and the rope box;
+- the tramways (rails only);
+- the chapel and the flagstaff.
+
+Still to do: interiors, the optic, the bothies, the signal boards, the tanks, and the railway's
+hauling gear.
 
 ### 5.4 Ocean and weather
 
@@ -722,14 +740,26 @@ can run in parallel from Phase 2 onward.
   - Poster: ramp fog, a painted sky, flat clouds, banded light and tints;
   - Albumen and Cyanotype prints in the final pass.
 
+- Phase 2, first cut, behind `?setting=flannan`:
+  - Eilean Mòr from the real DEM (§5.2);
+  - the light station's exterior (§5.3);
+  - the far shore across the sea, with the Earth's curvature and a visibility setting, so that Lewis and
+    Harris show only on clear days;
+  - winter turf instead of the tropical ground;
+  - no vegetation, fishing game or boat.
+
 ### The next five tasks
 
-1. The Poster colour script across all eight keys (§4.8), judged on contact sheets of the review views.
-2. A stylized water mode. Poster's sea reflects the painted sky and needs its own ramp (§4.5 step 9), along
-   with foliage puff and detail fade.
-3. The edge pass (§4.5 step 7), then the palette and dither mode of the final pass.
-4. Eilean Mòr's terrain from real elevation data (Phase 2, §5.2).
-5. Behind `?setting=flannan`, cut the tropical systems for good: palms, the reef, turquoise shallows.
+1. The Flannan ground and coast:
+   - cliff surf instead of the bay's breakers (`CliffSurge`, §5.4);
+   - rock and turf detail, and grass that is not tropical;
+   - sea birds on the ledges.
+2. The lighthouse beams and the lamp (§6 `Lamp`), and the Watcher's lamp at Gallan Head across the sea
+   (§3.4).
+3. The Poster colour script across all eight keys (§4.8) on the Flannan views, including a stylized water
+   mode (§4.5 step 9). Its fog should follow the visibility, so the far shore shows on clear days.
+4. The interiors of the tower and the keepers' house (§5.3).
+5. A weather timeline driving the visibility, the wind, the sea and the clouds (§5.4).
 
 ---
 

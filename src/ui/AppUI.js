@@ -4,6 +4,7 @@ import { G } from '../core/Globals.js';
 import { GroundBounce } from '../materials/GroundBounce.js';
 import { STYLES, STYLE_NAMES } from '../style/Styles.js';
 import { SETTINGS } from '../sky/Setting.js';
+import { hazeDensityForVisibility } from '../post/AirHaze.js';
 
 // Binds the Tidewater UI (panel + HUD) to the running app.
 const SEA = {
@@ -174,6 +175,13 @@ export class AppUI {
 			s.haze = app.haze.density.value;
 			s.shafts = app.haze.shafts.value;
 			atmo.addSlider( { label: 'Haze', object: s, key: 'haze', min: 0, max: 4, step: 0.05, tooltip: 'Aerial perspective and marine haze density (1 = about 20 km visibility at sea level, 0 = clear air).', onChange: ( v ) => { app.haze.density.value = v; } } );
+			if ( app.flannan ) {
+
+				// the same density, as a distance: Lewis (33 km) and St Kilda (71-78 km) show on clear days only
+				s.visibility = Number( app.qs.get( 'vis' ) ) || 30;
+				atmo.addSlider( { label: 'Visibility', object: s, key: 'visibility', min: 2, max: 150, log: true, format: ( v ) => `${ Math.round( v ) } km`, tooltip: 'How far you can see at sea level. Lewis is 33 km east, St Kilda 71-78 km south-west: they show only on clear days.', onChange: ( v ) => { app.haze.density.value = hazeDensityForVisibility( v ); } } );
+
+			}
 			atmo.addSlider( { label: 'Sun shafts', object: s, key: 'shafts', min: 0, max: 3, step: 0.05, tooltip: 'Volumetric light shafts and crepuscular rays in the haze (shadows of palms, the pier, hills and clouds). 0 turns them off.', onChange: ( v ) => { app.haze.shafts.value = v; } } );
 
 		}

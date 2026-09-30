@@ -3,7 +3,7 @@ import { GPU } from '../engine/gpu/GPU.js';
 import { Texture } from '../engine/gpu/Texture.js';
 import { readTexture } from '../engine/gpu/Readback.js';
 import { G } from './Globals.js';
-import { VIEWS } from './DebugViews.js';
+import { VIEWS, applyViewVisibility } from './DebugViews.js';
 
 // Frame-time benchmark (?bench in the URL; console: `await __bench.run()`).
 //
@@ -232,6 +232,7 @@ export class Bench {
 
 		const v = VIEWS[ name ];
 		if ( v.time !== undefined ) app.settings.timeOfDay = v.time;
+		applyViewVisibility( app, v );
 		app.setFreeCam( true );
 		app.fly.setPose( new Vector3( ...v.p ), v.yaw, v.pitch );
 		app.fly.velocity.set( 0, 0, 0 );

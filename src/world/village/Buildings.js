@@ -51,7 +51,7 @@ function gableEndPart( base, hSide, hApex, t ) {
 // ---------------------------------------------------------------------------
 // shared building blocks (all in the builder's current frame; wall surface at z = 0, facing +z)
 
-function windowUnit( B, rand, cx, sillY, ww, wh, st ) {
+export function windowUnit( B, rand, cx, sillY, ww, wh, st ) {
 
 	const tw = 0.085, tp = 0.035;
 	const trim = st.trim, td = () => [ rand.next(), st.trimPaint, 0, st.weather ];
@@ -137,7 +137,7 @@ function windowUnit( B, rand, cx, sillY, ww, wh, st ) {
 
 }
 
-function doorUnit( B, rand, cx, floorY, st ) {
+export function doorUnit( B, rand, cx, floorY, st ) {
 
 	const dw = 0.92, dh = 2.08, tw = 0.09;
 	const trim = st.trim, td = () => [ rand.next(), st.trimPaint, 0, st.weather ];

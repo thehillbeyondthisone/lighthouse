@@ -181,7 +181,8 @@ export class WaterMaterial extends Material {
 		this.vertex = /* wgsl */`
 	let r = waterSurfaceVertex( v.nodeData, v.position.xz );
 	v.useWorld = true;
-	v.worldPos = r.position;
+	// the sea curves away below the horizon (0 in a flat world)
+	v.worldPos = r.position - vec3f( 0.0, curvatureDrop( r.position.xz ), 0.0 );
 	v.worldNormal = vec3f( 0.0, 1.0, 0.0 );
 	o.vLagXZ = r.lagXZ;
 	o.vWaveH = r.height;

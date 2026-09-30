@@ -61,7 +61,9 @@ const _lanternEuler = new Euler();
 
 export class Village {
 
-	constructor( { scene, terrain, colliders } ) {
+	// build( ctx, village ): another settlement on the same builder, materials and merged meshes
+	// instead of the tropical village (the Flannan light station: src/world/flannan/Station.js)
+	constructor( { scene, terrain, colliders, build = null } ) {
 
 		this.scene = scene;
 		this.terrain = terrain;
@@ -83,11 +85,22 @@ export class Village {
 		this.harbor = this.B;
 		this.town = this.B;
 		this.inst = new InstancedProps( this.B );
+		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: this.inst, checks: this.foundationChecks } );
+
+		if ( build ) {
+
+			this.path = null;
+			this.sidePaths = [];
+			this.lanterns = [];
+			build( ctx( this.B ), this );
+			this._assemble();
+			scene.add( this.group );
+			return;
+
+		}
 
 		const specs = this._layout( rand );
 		this._flattenPads( specs );
-
-		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: this.inst, checks: this.foundationChecks } );
 
 		// the fish sign at the pier entrance is its own small mesh: it swings in the wind (update())
 		this.signB = new Builder();

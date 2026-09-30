@@ -21,6 +21,10 @@ import { SkyProClouds } from './sky/SkyProClouds.js';
 import { Environment } from './sky/Environment.js';
 
 import { TerrainData } from './world/TerrainData.js';
+import { loadFlannanData } from './world/flannan/FlannanData.js';
+import { FlannanTerrainData } from './world/flannan/FlannanTerrain.js';
+import { buildStation, STATION } from './world/flannan/Station.js';
+import { FarShore, CURVATURE } from './world/flannan/FarShore.js';
 import { TerrainGPU } from './world/TerrainGPU.js';
 import { Terrain } from './world/Terrain.js';
 import { computeShoreField } from './world/ShoreField.js';
@@ -55,7 +59,7 @@ import { AirMotes } from './fx/AirMotes.js';
 
 import { Underwater, LENS_REACH } from './post/Underwater.js';
 import { PostFX } from './post/PostFX.js';
-import { AirHaze } from './post/AirHaze.js';
+import { AirHaze, hazeDensityForVisibility } from './post/AirHaze.js';
 import { FlyCamera } from './player/FlyCamera.js';
 import { Player } from './player/Player.js';
 import { Game } from './game/Game.js';
@@ -117,6 +121,14 @@ export class App {
 		this.scene = scene;
 		this.camera = camera;
 
+		// the Flannans see Lewis and Harris up to ~100 km away, St Kilda at 71-78 km
+		if ( this.setting.key === 'flannan' ) {
+
+			camera.far = 150000;
+			camera.updateProjectionMatrix();
+
+		}
+
 		this.input = new Input( engine.domElement );
 		this.fly = new FlyCamera( camera, engine.domElement, this.input );
 		this.fly.setPose( new Vector3( 20, 6, - 20 ), Math.PI * 0.9, - 0.12 );
@@ -145,13 +157,16 @@ export class App {
 
 		// ---------------------------------------------------------------- island
 		await progress( 0.06, 'Shaping the island…' );
-		this.terrainData = new TerrainData();
+		// ?setting=flannan: Eilean Mòr from the real DEM, the light station on it and the coasts seen from
+		// it (src/world/flannan); otherwise Tidewater's volcanic island and its village
+		this.flannan = this.setting.key === 'flannan' ? await loadFlannanData() : null;
+		this.terrainData = this.flannan ? new FlannanTerrainData( this.flannan.grids.island ) : new TerrainData();
 		this.colliders = new Colliders();
 		// the village flattens building pads into the heightmap: build it before any terrain
-		// data is derived (shore field, GPU textures, meshes)
-		await progress( 0.12, 'Building the village…' );
-		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders } );
-		if ( ! qs.has( 'noVeg' ) ) {
+		// data is derived (shore field, GPU textures, meshes). The station grades its yard and tracks.
+		await progress( 0.12, this.flannan ? 'Building the light station…' : 'Building the village…' );
+		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, build: this.flannan ? buildStation : null } );
+		if ( ! qs.has( 'noVeg' ) && ! this.flannan ) {
 
 			await progress( 0.14, 'Planting the island…' );
 			this.vegetation = new Vegetation( { scene, terrain: this.terrainData, village: this.village } );
@@ -160,11 +175,21 @@ export class App {
 		}
 
 		await progress( 0.19, 'Rolling in the swell…' );
-		this.shoreField = computeShoreField( this.terrainData, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
+		const swellDir = this.flannan ? [ Math.cos( - 20 * Math.PI / 180 ), Math.sin( - 20 * Math.PI / 180 ) ] : [ WORLD.swellDir.x, WORLD.swellDir.y ];
+		this.shoreField = computeShoreField( this.terrainData, { res: 512, swellDir } );
 		this.terrainGPU = new TerrainGPU( this.terrainData, this.shoreField );
 		// terrain and rocks apply the heightfield sun shadow (long hill shadows) in their own lighting
 		this.terrain = new Terrain( { scene, terrainData: this.terrainData, terrainGPU: this.terrainGPU, renderer } );
+		if ( this.flannan ) this.terrain.material.uniforms.maritime.value = 1;
 		this.rocks = new Rocks( { scene, terrain: this.terrain, village: this.village, colliders: this.colliders } );
+		// Lewis, Harris, St Kilda and the other Seven Hunters, across the sea
+		this.farShore = this.flannan ? new FarShore( this.flannan ) : null;
+		if ( this.farShore ) {
+
+			scene.add( this.farShore.group );
+			useStaticVelocity( this.farShore.group );
+
+		}
 		// driftwood (CC0 photoscans), wrack, pebbles and village clutter
 		this.debris = new Debris( { scene, terrain: this.terrain, village: this.village, vegetation: this.vegetation, rocks: this.rocks, colliders: this.colliders } );
 		// these apply the heightfield sun shadow in their own lighting model (see UnderwaterLighting)
@@ -182,13 +207,33 @@ export class App {
 		scene.add( this.boat.group );
 		this.boat.group.position.copy( WORLD.boatDock.position );
 		this.boat.group.rotation.y = WORLD.boatDock.heading;
+		if ( this.flannan ) {
+
+			// no boat at the Flannans yet (the relief boat is docs/PLAN.md §2.4): kept, hidden, far out
+			this.boat.group.position.set( 900, 0, 900 );
+			this.boat.group.visible = false;
+
+		}
 
 		// ---------------------------------------------------------------- ocean
 		await progress( 0.3, 'Simulating the ocean…' );
-		this.fft = new OceanFFT( renderer );
+		// the Flannans in winter: a fresh south-westerly (force 5, blowing toward the north-east) over a long
+		// Atlantic swell from the west-south-west. Directions in degrees, x east / z south, as the UI's.
+		this.fft = new OceanFFT( renderer, this.flannan ? {
+			local: { windSpeed: 9, windDirection: - 45, fetch: 300, spreadBlend: 0.85, swell: 0.05 },
+			swell: { scale: 0.6, windSpeed: 8, windDirection: - 20, fetch: 2000, spreadBlend: 1.0, swell: 0.9, shortWavesFade: 0.1 },
+		} : {} );
+		if ( this.flannan ) {
+
+			G.windDir.value.set( Math.cos( - Math.PI / 4 ), Math.sin( - Math.PI / 4 ) );
+			G.windSpeed.value = 9;
+
+		}
 		if ( this.reef && this.reef.setOcean ) this.reef.setOcean( this.fft ); // coral / sea fan sway follows the simulated swell
 		this.foamTexture = createFoamTexture( renderer );
-		this.oceanLOD = new CDLOD( { gridSize: Number( qs.get( 'G' ) || 32 ), leafSize: 8, levels: 12, minY: - 25, maxY: 25 } );
+		// the Flannans: one more level (to ~80 km: the sea horizon is 38 km from the lantern, farther from
+		// above) and bounds that hold the sea as it curves away (FarShore.js CURVATURE)
+		this.oceanLOD = new CDLOD( { gridSize: Number( qs.get( 'G' ) || 32 ), leafSize: 8, levels: this.flannan ? 13 : 12, minY: this.flannan ? - 800 : - 25, maxY: 25 } );
 		this.surface = new WaterSurface( { fft: this.fft, cdlod: this.oceanLOD, foamTexture: this.foamTexture } );
 		this.surface.terrain = this.terrainGPU;
 		this.seaDetail = new SeaDetail();
@@ -303,6 +348,8 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// dust, pollen, salt aerosol, seed fluff and gnats drifting around the camera
 		this.airMotes = new AirMotes( { terrain: this.terrainGPU, clouds: this.clouds, csm: this.csm, reversedDepth: true } );
 		scene.add( this.airMotes.mesh );
+		// no pollen, seed tufts or gnats over the Flannans in December
+		if ( this.flannan ) this.airMotes.intensity.value = 0;
 		this.boatCtl = new BoatController( { model: this.boat, query: this.query, terrain: this.terrainData, colliders: this.colliders } );
 		this.boatSpray = new BoatSpray( { boat: this.boatCtl, spray: this.spray } );
 		// humpback cruising the deep water around the island (model fetched from public/models/whale)
@@ -323,6 +370,15 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.wake = new WakeSim( renderer, { terrainGPU: this.terrainGPU, boat: this.boatCtl, colliders: this.colliders } );
 		this.surface.wake = this.wake;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl, reef: this.reef } );
+		if ( this.flannan ) {
+
+			// in the station's yard, inside the south gate, facing the tower
+			const g = STATION.southGate, x = g.x + 1.5, z = g.z - 3;
+			this.player.position.set( x, this.terrainData.heightAt( x, z ), z );
+			this.player.yaw = Math.atan2( x - STATION.tower.x, z - STATION.tower.z );
+			this.fly.setPose( new Vector3( - 42, 73.4, 44 ), Math.atan2( - 39, 41 ), 0.25 );
+
+		}
 		// birds, beach crabs, sanderlings (after spray / query / boat, which they use)
 		this.wildlife = off( 'noWildlife' ) ? null : new Wildlife( {
 			scene, renderer, terrain: this.terrainData, terrainGPU: this.terrainGPU, shore: this.shore,
@@ -346,6 +402,10 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			sky: this.sky, clouds: this.clouds, terrain: this.terrainGPU, csm: this.csm,
 		} );
 		this.post = new PostFX( renderer, { sceneRenderer: this.sceneRenderer, camera, underwater: this.underwater, clouds: this.clouds, sunDir: this.atmosphere.sunDir, haze: this.haze } );
+		// visibility at sea level (km): ?vis=, or 30 km at the Flannans (Lewis shows on clearer days only);
+		// review views may set their own (DebugViews `vis`), the others get this back
+		if ( this.haze && ( qs.has( 'vis' ) || this.flannan ) ) this.haze.density.value = hazeDensityForVisibility( Number( qs.get( 'vis' ) ) || 30 );
+		this.defaultHaze = this.haze ? this.haze.density.value : null;
 		G.exposure.value = this.settings.exposure;
 		if ( qs.has( 'scale' ) ) this.settings.renderScale = Number( qs.get( 'scale' ) ) || 1;
 		this.setRenderScale( this.settings.renderScale );
@@ -358,10 +418,10 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.audio = qs.has( 'noAudio' ) ? null : new SoundScape();
 		this.player.audio = this.audio;
 		// the fishing game (rod, bites, catch, cooler, fish stand)
-		this.game = new Game( this );
+		this.game = this.flannan ? null : new Game( this );
 		// the lanterns at Joe's fish stand and Marta's chandlery (lit from dusk like the village lamps);
 		// positions are in each stall's frame (x right, z toward the customer), turned by its yaw
-		for ( const [ s, lx, ly, lz ] of [ [ STAND, - 0.9, 1.85, 0.1 ], [ CHANDLERY, - 0.75, 1.58, - 1.45 ] ] ) {
+		if ( ! this.flannan ) for ( const [ s, lx, ly, lz ] of [ [ STAND, - 0.9, 1.85, 0.1 ], [ CHANDLERY, - 0.75, 1.58, - 1.45 ] ] ) {
 
 			const c = Math.cos( s.yaw ), sn = Math.sin( s.yaw );
 			const x = s.x + lx * c + lz * sn, z = s.z - lx * sn + lz * c;
@@ -661,8 +721,10 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.wake.update( dt );
 		if ( this.freeCam ) this.fly.update( dt );
 		else this.player.update( dt );
-		this.game.update( dt );
+		if ( this.game ) this.game.update( dt );
 		this.updateSun();
+		// the world drops away below the camera with the Earth's curvature (FarShore.js)
+		if ( this.flannan ) FrameUniforms.fields.curvature.value.set( CURVATURE, this.camera.position.x, this.camera.position.z, 0 );
 
 		this.atmosphere.update( dt, this.camera.position.y );
 		this.applyAtmosphereReadback();

@@ -63,6 +63,8 @@ export class Terrain {
 				viewPos: [ 'vec3f', this.uViewPos.value ],
 				wetDarken: [ 'f32', 0.58 ],
 				gustOffset: [ 'vec2f', this.gustOffset ],
+				// 1: a treeless northern island in winter (the Flannans): turf everywhere, no forest, no laterite
+				maritime: [ 'f32', 0 ],
 			},
 			attributes: { nodeData: 'vec4f' },
 		} );
@@ -341,10 +343,10 @@ const TERRAIN_SURFACE = /* wgsl */`
 			* ( 1.0 - smoothstep( 50.0, 220.0, camDist ) * 0.85 );
 		// forest on the higher / steeper ground and in the gullies, tall-grass meadow on the valley
 		// floor and around the village (same classification as the vegetation's land cover)
-		let jungleW = sat( smoothstep( 9.0, 24.0, h + ( mcr - 0.5 ) * 18.0 ) + smoothstep( 0.18, 0.36, slope ) + gully * 0.6 );
+		let jungleW = sat( smoothstep( 9.0, 24.0, h + ( mcr - 0.5 ) * 18.0 ) + smoothstep( 0.18, 0.36, slope ) + gully * 0.6 ) * ( 1.0 - mat.maritime );
 		// landslide scars: raw red-brown laterite in streaks down steep slopes, rare
 		let lateriteW = smoothstep( 0.62, 0.74, scar + ( macroB - 0.5 ) * 0.3 ) * smoothstep( 0.3, 0.42, slope )
-			* smoothstep( 0.52, 0.66, mcr ) * notRock * 0.85;
+			* smoothstep( 0.52, 0.66, mcr ) * notRock * 0.85 * ( 1.0 - mat.maritime );
 
 		// ---- beach sand: pale coral sand, drifts of warmer / coarser sand, grain
 		let dryK = smoothstep( 0.8, 3.0, h );
@@ -424,7 +426,12 @@ const TERRAIN_SURFACE = /* wgsl */`
 		// afar, the forest canopy; laterite scars
 		let V = normalize( frame.cameraPos - p );
 		let NdV = sat( dot( N0, V ) );
-		let mt = terrainMeadowTone( macroA, macroB, slope, N0.z, dM.w * 0.65 + dN.w * 0.35, true );
+		var mt = terrainMeadowTone( macroA, macroB, slope, N0.z, dM.w * 0.65 + dN.w * 0.35, true );
+		// winter turf on a northern island: dull olive grazed sward, tawny dead grass, peaty brown patches
+		let winterK = smoothstep( 0.3, 0.8, macroA * 0.6 + macroB * 0.4 + ( dM.w - 0.5 ) * 0.3 );
+		var winter = mix( ${ S( 0.38, 0.39, 0.22 ) }, ${ S( 0.55, 0.49, 0.31 ) }, winterK );
+		winter = mix( winter, ${ S( 0.36, 0.29, 0.19 ) }, smoothstep( 0.62, 0.8, macroB + ( dN.w - 0.5 ) * 0.4 ) * 0.5 );
+		mt.tone = mix( mt.tone, winter, mat.maritime );
 		// clumps (1-3 m) and tussocks, blade-scale grain
 		let clump = dM.w * 0.6 + dN.y * 0.4;
 		// seen from afar the tussocks and their shadowed gaps are what makes tall grass read as
@@ -504,7 +511,8 @@ const TERRAIN_SURFACE = /* wgsl */`
 
 		// ---- combine
 		let meadowW = ( 1.0 - jungleW ) * ( 1.0 - pathW ) * notRock * ( 1.0 - sandW ) * landW * ( 1.0 - screeW );
-		terMeadowW = meadowW;
+		// (the grazed turf of a northern island is short: no tall-grass self-shadowing at low sun)
+		terMeadowW = meadowW * ( 1.0 - mat.maritime );
 		var albedo = mix( ground, dirt, pathW );
 		albedo = mix( albedo, sand, max( sandW, underW * notRock ) );
 		albedo = mix( albedo, rockAlbedo, rockW );

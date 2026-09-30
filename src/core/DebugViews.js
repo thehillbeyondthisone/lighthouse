@@ -1,4 +1,5 @@
 import { Vector3 } from '../engine/math/index.js';
+import { hazeDensityForVisibility } from '../post/AirHaze.js';
 
 // Named review cameras used to check every change from the same set of angles.
 // window.__view( name ) jumps there; window.__views lists them.
@@ -35,7 +36,54 @@ export const VIEWS = {
 	tStacks: { p: [ - 240, 8, 300 ], yaw: 0.15, pitch: - 0.05, time: 16.5 },
 	tCove: { p: [ - 160, 2.2, - 30 ], yaw: 1.35, pitch: - 0.08, time: 10.5 },
 	tMorning: { p: [ 18, 3.0, - 60 ], yaw: 0.2, pitch: 0.05, time: 7.2 },
+
+	// ?setting=flannan (src/world/flannan): given as a target (`at`) instead of yaw / pitch
+	fStation: { p: [ - 42, 73.4, 44 ], at: [ - 3, 88, 3 ], time: 12.4 }, // the station from the south-west
+	fYard: { p: [ - 10.5, 82.25, 18.5 ], at: [ - 2, 89, 1 ], time: 12.4 }, // inside the south gate
+	fChapel: { p: [ - 16, 71.8, 62 ], at: [ - 7, 74.5, 49 ], time: 12.4 }, // St Flannan's chapel below the light
+	fLewis: { p: [ 3.2, 99.9, 0.8 ], at: [ 943, 99.9, 343 ], time: 12.4 }, // from the gallery east to Lewis and Harris
+	fLewisClear: { p: [ 3.2, 99.9, 0.8 ], at: [ 943, 99.9, 343 ], time: 12.4, vis: 90 }, // ... on a clear day
+	// through a telescope (fov in degrees): Gallan Head, 33 km, where the Watcher keeps his post; the Harris hills
+	fGallan: { p: [ 3.2, 99.9, 0.8 ], at: [ 32503, 60, 5435 ], fov: 5, time: 12.4, vis: 90 },
+	fHarris: { p: [ 3.2, 99.9, 0.8 ], at: [ 45000, 160, 38000 ], fov: 9, time: 12.4, vis: 90 },
+	fStKilda: { p: [ - 3.2, 99.9, 0.8 ], at: [ - 59400, 150, 52300 ], fov: 4, time: 12.4, vis: 110 },
+	fEastSea: { p: [ 185, 10, 95 ], at: [ 110, 25, 40 ], time: 12.4 }, // the east landing from the sea
+	fWestLanding: { p: [ - 420, 16, 145 ], at: [ - 330, 22, 92 ], time: 12.4 }, // the west landing's geo
+	fAerial: { p: [ 230, 230, 320 ], at: [ - 80, 40, 10 ], time: 12.4 },
+	fDusk: { p: [ - 42, 73.4, 44 ], at: [ - 3, 88, 3 ], time: 15.3 },
 };
+
+// a view's own visibility (km, `vis`) and field of view (degrees, `fov`), or the app's
+export function applyViewVisibility( app, v ) {
+
+	const cam = app.camera;
+	if ( cam ) {
+
+		if ( app.defaultFov === undefined ) app.defaultFov = cam.fov;
+		const fov = v.fov || app.defaultFov;
+		if ( cam.fov !== fov ) {
+
+			cam.fov = fov;
+			cam.updateProjectionMatrix();
+
+		}
+
+	}
+
+	if ( ! app.haze ) return;
+	if ( v.vis ) app.haze.density.value = hazeDensityForVisibility( v.vis );
+	else if ( app.defaultHaze !== null && app.defaultHaze !== undefined ) app.haze.density.value = app.defaultHaze;
+
+}
+
+// entries given as a target point: their yaw / pitch (yaw 0 looks along -z, pi / 2 along -x)
+for ( const v of Object.values( VIEWS ) ) if ( v.at ) {
+
+	const dx = v.at[ 0 ] - v.p[ 0 ], dy = v.at[ 1 ] - v.p[ 1 ], dz = v.at[ 2 ] - v.p[ 2 ];
+	v.yaw = Math.atan2( - dx, - dz );
+	v.pitch = Math.atan2( dy, Math.hypot( dx, dz ) );
+
+}
 
 export function installDebugViews( app ) {
 
@@ -53,6 +101,7 @@ export function installDebugViews( app ) {
 		const v = VIEWS[ name ];
 		if ( ! v ) return 'unknown view';
 		if ( v.time !== undefined ) app.settings.timeOfDay = v.time;
+		applyViewVisibility( app, v );
 		if ( app.setFreeCam ) app.setFreeCam( true );
 		app.fly.setPose( new Vector3( ...v.p ), v.yaw, v.pitch );
 		app.fly.velocity.set( 0, 0, 0 );

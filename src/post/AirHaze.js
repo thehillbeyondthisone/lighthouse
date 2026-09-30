@@ -48,6 +48,10 @@ const SS_GAIN = 3.5;
 const MARINE = { sigma: 1.5e-4, H: 110 };
 const AEROSOL = { sigma: 3.2e-5, H: 1400 };
 
+// the haze density that gives a visibility of `km` at sea level (Koschmieder: 3.912 / extinction);
+// the default density 1.6 is about 13 km
+export const hazeDensityForVisibility = ( km ) => 3.912 / ( ( MARINE.sigma + AEROSOL.sigma ) * Math.max( km, 0.05 ) * 1000 );
+
 const f = ( x ) => {
 
 	const s = String( x );

@@ -1,0 +1,73 @@
+{
+	"source": "tools/terrain/flannan.mjs",
+	"attribution": "Copernicus DEM GLO-30: © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA. Seabed: AWS Terrain Tiles (GEBCO).",
+	"origin": {
+		"lat": 58.28805555555555,
+		"lon": -7.588055555555555,
+		"note": "the Flannan light; x east, z south (m), azimuthal equidistant"
+	},
+	"places": {
+		"gallanHead": {
+			"x": 32503,
+			"z": 5435,
+			"note": "Gallan Head, Lewis (the Watcher's post)"
+		}
+	},
+	"grids": [
+		{
+			"name": "island",
+			"file": "island.bin",
+			"format": "int16",
+			"step": 0.1,
+			"x0": -1020,
+			"z0": -1020,
+			"dx": 8,
+			"nx": 256,
+			"nz": 256
+		},
+		{
+			"name": "flannans",
+			"file": "flannans.bin",
+			"format": "uint8",
+			"step": 0.5,
+			"x0": -4490,
+			"z0": -4490,
+			"dx": 20,
+			"nx": 450,
+			"nz": 450
+		},
+		{
+			"name": "hebrides",
+			"file": "hebrides.bin",
+			"format": "uint8",
+			"step": 4,
+			"x0": 18000,
+			"z0": -25000,
+			"dx": 150,
+			"nx": 534,
+			"nz": 754
+		},
+		{
+			"name": "stkilda",
+			"file": "stkilda.bin",
+			"format": "uint8",
+			"step": 2,
+			"x0": -61954,
+			"z0": 48674,
+			"dx": 40,
+			"nx": 176,
+			"nz": 176
+		},
+		{
+			"name": "uig",
+			"file": "uig.bin",
+			"format": "uint8",
+			"step": 2.5,
+			"x0": 29000,
+			"z0": -4000,
+			"dx": 30,
+			"nx": 400,
+			"nz": 700
+		}
+	]
+}

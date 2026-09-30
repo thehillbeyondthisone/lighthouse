@@ -58,6 +58,9 @@ const FRAME_FIELDS = {
 	pad0: [ 'f32', 0 ],
 	// free slots for experiments / debug views
 	debug: [ 'vec4f', new Vector4() ],
+	// the Earth's curvature (wgsl/common.js curvatureDrop): x = 1 / ( 2 R_eff ) (0: a flat world), yz the
+	// main camera's xz, which every view drops the world below (shadow cascades included)
+	curvature: [ 'vec4f', new Vector4() ],
 
 	// ---- the active style (src/style/StyleDirector.js writes these every frame; all zero = photoreal,
 	// and every style branch in the shaders is skipped). Colours are sRGB display colours, blended as

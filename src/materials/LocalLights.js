@@ -287,9 +287,9 @@ export function addVillageLights( lights, village ) {
 		const src = { position: l.position, color: l.color, intensity: l.intensity * ( K[ kind ] ?? 1.2 ), range: R[ kind ] ?? 12, kind };
 		if ( kind === 'window' ) {
 
-			// outward normal: away from the nearest building centre
+			// outward normal: the window's own (l.dir), or away from the nearest building centre
 			let best = null, bd = Infinity;
-			for ( const b of village.buildings || [] ) {
+			if ( ! l.dir ) for ( const b of village.buildings || [] ) {
 
 				const dd = ( b.x - l.position.x ) ** 2 + ( b.z - l.position.z ) ** 2;
 				if ( dd < bd ) {
@@ -301,7 +301,7 @@ export function addVillageLights( lights, village ) {
 
 			}
 
-			const n = best ? _v.set( l.position.x - best.x, 0, l.position.z - best.z ) : _v.set( 0, 0, 1 );
+			const n = l.dir ? _v.copy( l.dir ) : best ? _v.set( l.position.x - best.x, 0, l.position.z - best.z ) : _v.set( 0, 0, 1 );
 			if ( n.lengthSq() < 1e-6 ) n.set( 0, 0, 1 );
 			n.normalize();
 			src.position = l.position.clone().addScaledVector( n, 0.35 );

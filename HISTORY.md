@@ -31,6 +31,76 @@ entries first.
                    --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
   ```
 
+## 2026-09-29 (later): Eilean Mòr, the light station and the far shore
+
+The user asked for "the lighthouse station and distant other side you can only look across to, and only
+when the weather is clear". `?setting=flannan` now loads a different world: the real island, the station
+on it, and Lewis, Harris and St Kilda across the sea.
+
+- **Real elevation data.** `node tools/terrain/flannan.mjs` bakes `public/terrain/flannan/` (about
+  185 KB) from the Copernicus GLO-30 DEM (the land) and the AWS terrarium tiles (the seabed). Both come
+  from S3, which is reachable from this container; OSM, Canmore and HES are not. The grids are in the
+  engine's frame: an azimuthal equidistant projection centred on the light, x east, z south.
+  - `island`: Eilean Mòr, Eilean Tighe and the seabed, 2 km at 8 m;
+  - `flannans`: the other Seven Hunters, 9 km at 20 m;
+  - `hebrides`: Lewis and Harris, 18–98 km east, at 150 m;
+  - `stkilda`: St Kilda, 71–78 km south-west (Boreray, Hirta), at 40 m;
+  - `uig`: the Uig coast of Lewis facing the Flannans (Gallan Head, 33 km) at the DEM's own 30 m, for
+    the telescope.
+
+  `tools/terrain/cog.mjs` reads the Cloud Optimized GeoTIFFs (DEFLATE and the floating-point predictor)
+  with no dependencies. `src/world/flannan/FlannanData.js` loads the grids in the browser.
+- **The walkable island** (`src/world/flannan/FlannanTerrain.js`, a `TerrainData` subclass; the base
+  class takes `{ generate: false }`).
+  - The DEM is upsampled to 1 m and the land lifted 15 %: the 30 m surface model rounds off the summit,
+    and the light's focal plane is 101 m on a 23 m tower.
+  - Sheer, ledged cliffs all round: near the coast the ground takes the plateau height (a max filter),
+    then drops to the sea.
+  - Two landing geos, east and west. Each has a flight graded up the cliff at no more than 45°: the east
+    flight rises 71 m over an 81 m run, the west flight 35 m over 42 m.
+  - The seabed shelves to about 50 m, with boulders at the cliff foot.
+- **The station** (`src/world/flannan/Station.js`), built with the village's GeoBuilder, materials and
+  merged draws. `Village` takes a `build` option and skips its tropical layout.
+  - The tower: an ochre base, a white shaft, the corbelled walkway with iron railings, the cast-iron deck
+    and a diamond-latticed lantern under a black cupola.
+  - The one-storey, flat-roofed L-plan keepers' house, with the tower at its north-east corner.
+    Limewashed, with the Northern Lighthouse Board's ochre margins, long-and-short quoins, base course
+    and blocking course. Sash windows and doors come from `Buildings.js`, now exported.
+  - The boundary wall with gatepiers, and an oil store.
+  - The two landings: a concrete stage, a stepped flight with railings, and a derrick crane. On the
+    west flight, the box of ropes sits 33 m up, the "110 feet" of Muirhead's report.
+  - The tramways to the gates, the flagstaff, and St Flannan's drystone chapel 28 m south of the wall,
+    to Canmore's measurements.
+
+  Walls use continuous plaster uvs across their pieces. The stone material gained a plaster-cover and a
+  peat-splash control in its spare vdata channels; existing uses are unchanged.
+- **The far shore** (`src/world/flannan/FarShore.js`): a static mesh per grid, about 500k triangles.
+  The cells under the finer Uig grid are left out of the coarse one. It is frustum-culled, with bounds
+  that reach down as far as the curvature drops it.
+- **Telescope views** (`fGallan`, `fHarris`, `fStKilda`) set their own field of view (`fov`) and
+  visibility.
+- **The Earth's curvature.** `frame.curvature` and `curvatureDrop( xz )` in `wgsl/common.js`, with
+  refraction k = 0.13. The drop is 84 m at 35 km. The sea's vertices and the far shore's drop below the
+  main camera; everywhere else it is zero, so Tidewater is unchanged. From the lantern the sea horizon
+  lies 38 km out. The camera's far plane is 150 km at the Flannans, and the ocean LOD has one more
+  level.
+- **Visibility.** `?vis=<km>` sets the haze (`hazeDensityForVisibility` in `AirHaze.js`, about
+  21.5 / km). At the Flannans the default is 30 km, so Lewis only shows on clearer days. The Sky tab
+  has a Visibility slider there, and a review view can carry its own (`vis: 90` in `fLewisClear`).
+- **The ground.** The terrain material takes `maritime` (set at the Flannans): no forest band, no
+  laterite, and winter turf instead of the tropical meadow.
+- **Other wiring.** At the Flannans:
+  - the vegetation, the fishing game and the summer air particles are left out;
+  - the boat is hidden;
+  - the sea has a winter south-westerly (9 m/s toward the north-east) over a west-south-west swell;
+  - the player starts in the station's yard.
+- **Review views:** `fStation`, `fYard`, `fChapel`, `fLewis`, `fEastSea`, `fWestLanding`, `fAerial`,
+  `fDusk`. Views can now be given as a target point (`at`).
+- **Checking geometry without the GPU.** The scratch script (a small software rasterizer over the
+  builder's batches) renders the station in seconds. A real run
+  (`npm run shots -- --views=fStation,fYard --params="setting=flannan&lite" --adapt`) loads in about 55 s
+  and takes about 2 min per view at 640 × 360.
+
 ## 2026-09-29: the Style Lab's first build
 
 - **The post chain and the compute passes fit WebGPU's default limits** (16 sampled / 4 storage textures
