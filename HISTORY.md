@@ -83,7 +83,8 @@ on it, and Lewis, Harris and St Kilda across the sea.
   refraction k = 0.13. The drop is 84 m at 35 km. The sea's vertices and the far shore's drop below the
   main camera; everywhere else it is zero, so Tidewater is unchanged. From the lantern the sea horizon
   lies 38 km out. The camera's far plane is 150 km at the Flannans, and the ocean LOD has one more
-  level.
+  level. The haze measures height above the curved surface (`hazeVy` in `AirHaze.js`). Without that, a
+  far coast's foot sank into a marine layer far denser than at sea level and showed as a bright band.
 - **Visibility.** `?vis=<km>` sets the haze (`hazeDensityForVisibility` in `AirHaze.js`, about
   21.5 / km). At the Flannans the default is 30 km, so Lewis only shows on clearer days. The Sky tab
   has a Visibility slider there, and a review view can carry its own (`vis: 90` in `fLewisClear`).

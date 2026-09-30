@@ -244,6 +244,14 @@ fn hazeLayerDepth( sigma: f32, H: f32, hc: f32, vy: f32, d: f32 ) -> f32 {
 	return base * fk;
 }
 
+// The ray's vertical direction component as the haze layers see it. The Earth's curvature (common.js
+// curvatureDrop) lowers far geometry below the camera's horizontal plane, but the air's layers follow
+// the curved surface: adding the drop back keeps a far coast in the air it stands in (otherwise its
+// foot sinks into a marine layer far denser than at sea level and turns into a bright band).
+fn hazeVy( dir: vec3f, dist: f32 ) -> f32 {
+	return dir.y + dist * dot( dir.xz, dir.xz ) * frame.curvature.x;
+}
+
 // unshadowed in-scatter depth of both layers from height hc along a ray (direction y component vy)
 // over distance d: 1 - their transmittance
 fn hazeInScatter( hc: f32, vy: f32, d: f32 ) -> f32 {
@@ -352,7 +360,7 @@ fn styleFogApply( c: vec3f, dist: f32, dir: vec3f, camH: f32 ) -> vec3f {
 	let toward = dot( normalize( dir.xz + vec2f( 1e-6, 0.0 ) ), sunXZ / max( length( sunXZ ), 1e-6 ) ) * 0.5 + 0.5;
 	let k = pow( toward, 3.0 ) * frame.styleFogShape2.y;
 	let col = mix( mix( frame.styleFogNear.rgb, frame.styleFogFar.rgb, t ), mix( frame.styleFogSunNear.rgb, frame.styleFogSunFar.rgb, t ), k );
-	let meanH = max( camH + dir.y * dist * 0.5, 0.0 );
+	let meanH = max( camH + ( dir.y + dist * dot( dir.xz, dir.xz ) * frame.curvature.x ) * dist * 0.5, 0.0 );
 	let a = frame.styleFogShape2.x * pow( t, max( sh.z, 0.05 ) ) * exp( - meanH / max( sh.w, 1.0 ) );
 	// blended as paint, in sRGB display colours (the ramp's colours and opacity read as authored:
 	// common.js styleScene), plus whatever of the scene colour lies beyond the curve's clamp (sun
@@ -397,7 +405,8 @@ fn hazeApply( uv: vec2f, c: vec4f ) -> vec4f {
 
 			// ---- aerial perspective / marine haze on geometry (the water surface included)
 			if ( ! sky ) {
-				let tau = ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, camH, dir.y, dist ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, camH, dir.y, dist ) ) * hazeParams.density;
+				let vy = hazeVy( dir, dist );
+				let tau = ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, camH, vy, dist ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, camH, vy, dist ) ) * hazeParams.density;
 				let T = exp( - tau );
 				out = out * T + fog * ( 1.0 - T ) * ( 1.0 - fSun * ( 1.0 - h ) );
 				// Style Lab: the ramp fog in place of the aerial perspective
