@@ -39,6 +39,7 @@ const STEPS = 16;
 const MARCH_DIST = 2500; // m: shafts from clouds and hills reach this far
 const NEAR = 900; // m: explicit (shadowed) sun single scattering in front of geometry closer than this
 const FAR_CLAMP = 60000; // m (fits half float)
+const BEAM_RANGE = 40000; // m: the lighthouse beams' in-scatter is followed this far
 // screen-space god rays: radial blur taps per pass, sample decay per pass, overall gain
 const SS_TAPS = 8;
 const SS_DECAY = [ 0.9, 0.97, 1.0 ];
@@ -75,7 +76,7 @@ fn sunShadowHard( P: vec3f ) -> f32 {
 
 export class AirHaze {
 
-	constructor( { depthTexture, underwater, atmosphere, sky = null, clouds = null, terrain = null, csm = null } ) {
+	constructor( { depthTexture, underwater, atmosphere, sky = null, clouds = null, terrain = null, csm = null, beacons = null } ) {
 
 		this.depthTexture = depthTexture;
 		this.uw = underwater;
@@ -84,6 +85,9 @@ export class AirHaze {
 		this.clouds = clouds;
 		this.terrain = terrain;
 		this.csm = csm;
+		// the lamps of the night (src/materials/Beacons.js): the beams' in-scatter and far points of light
+		this.beacons = beacons;
+		this.layers = { marine: MARINE, aerosol: AEROSOL };
 
 		this.uniforms = new UniformBlock( 'HazeParams', {
 			// haze (1 = ~20 km visibility at sea level). Default: a humid tropical day, ~12 km: the far side
@@ -211,6 +215,7 @@ export class AirHaze {
 			HZ_CLOUDS: this.clouds && this.clouds.module ? 1 : 0,
 			HZ_TERRAIN: this.terrain && this.terrain.module ? 1 : 0,
 			HZ_MOON: this.sky && this.sky.module ? 1 : 0,
+			HZ_BEACONS: this.beacons ? 1 : 0,
 		};
 
 	}
@@ -340,7 +345,7 @@ fn hazeVisibility( P: vec3f ) -> f32 {
 		if ( this._compositeModule ) return this._compositeModule;
 		this._compositeModule = new ShaderModule( {
 			name: 'haze-composite',
-			deps: [ this.module ],
+			deps: [ this.module, this.beacons && this.beacons.module ].filter( Boolean ),
 			bindings: {
 				hazeLow: { texture: () => this.hist[ this._hc ].texture },
 				hazeSS: { texture: () => this.ssShafts.texture },
@@ -368,6 +373,37 @@ fn styleFogApply( c: vec3f, dist: f32, dir: vec3f, camH: f32 ) -> vec3f {
 	let d = stylePaint( c );
 	return c + styleScene( mix( d, col, a ) ) - styleScene( d );
 }
+
+#if HZ_BEACONS
+// A lamp at P (illuminance E at the eye before the haze) as a point of light: hidden behind anything
+// nearer (the lantern's glass stands 2 m in front of the lens), dimmed by the haze along the line of
+// sight exactly as the ground around it is
+fn hazeBeaconPoint( dir: vec3f, dist: f32, camH: f32, P: vec3f, E: f32, ang: f32 ) -> f32 {
+	if ( E <= 0.0 ) { return 0.0; }
+	let toP = P - underwaterParams.camPos;
+	let dP = length( toP );
+	if ( dist < dP * 0.995 - 3.0 ) { return 0.0; }
+	let u = toP / dP;
+	let vy = hazeVy( u, dP );
+	let tau = ( hazeLayerDepth( HZ_MARINE_SIGMA, HZ_MARINE_H, camH, vy, dP ) + hazeLayerDepth( HZ_AEROSOL_SIGMA, HZ_AEROSOL_H, camH, vy, dP ) ) * hazeParams.density;
+	return beaconsPoint( dir, u, E * exp( - tau ), ang );
+}
+
+// the Watcher's lamp, and the light itself while its lens is smaller than a pixel or two (nearer, the
+// lantern glass shows it: beaconsLantern). Both drop with the Earth's curvature like the land under them.
+fn hazeBeaconPoints( dir: vec3f, dist: f32, camH: f32 ) -> vec3f {
+	// a pixel's angular size; the image is a Gaussian of about half of it (the temporal resolve smooths it)
+	let pix = 2.0 / ( abs( frame.proj[ 1 ][ 1 ] ) * frame.resolution.y );
+	let ang = pix * 0.6;
+	let fp = beacons.far.xyz - vec3f( 0.0, curvatureDrop( beacons.far.xz ), 0.0 );
+	var c = beacons.farCol.rgb * hazeBeaconPoint( dir, dist, camH, fp, beacons.far.w, ang );
+	let lp = beacons.lens.xyz - vec3f( 0.0, curvatureDrop( beacons.lens.xz ), 0.0 );
+	let dl = max( length( lp - underwaterParams.camPos ), 1.0 );
+	let k = 1.0 - smoothstep( 0.7, 2.0, beacons.lens.w / ( dl * pix ) );
+	if ( k > 0.0 ) { c += beacons.beamCol.rgb * hazeBeaconPoint( dir, dist, camH, lp, beacons.own.x * k, max( ang, beacons.lens.w / dl ) ); }
+	return c;
+}
+#endif
 
 // c: the scene colour at uv. Returns the hazed colour.
 //   geometry: c T + (1 - T) fog (1 - fSun (1 - h)) + (1 - h) E p(θ) lit - h fSun fog (all - lit)
@@ -449,6 +485,12 @@ fn hazeApply( uv: vec2f, c: vec4f ) -> vec4f {
 				let k = 1.0 - exp( - HZ_MARINE_SIGMA * 300.0 * hazeParams.density );
 				out += Ep * rays * k * hazeParams.shafts * hazeParams.ssFade * ${ f( SS_GAIN ) };
 			}
+
+#if HZ_BEACONS
+			// ---- the lamps of the night: the light's beams in the haze, far points of light
+			out += beaconsBeams( underwaterParams.camPos, dir, min( dist, ${ f( BEAM_RANGE ) } ) );
+			out += hazeBeaconPoints( dir, dist, camH );
+#endif
 		}
 	}
 	return vec4f( out, c.a );

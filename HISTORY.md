@@ -31,6 +31,67 @@ entries first.
                    --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
   ```
 
+## 2026-09-30: the light, its beams, and the Watcher's lamp on Gallan Head
+
+docs/PLAN.md §8 task 2. At the Flannans (`?setting=flannan`) the light is now lit at sunset: its beams
+sweep through the haze, the lens flashes through the lantern glass, and 33 km across the sea the Watcher's
+lamp shows on Gallan Head, but only through clear air.
+
+- **The lamp** (`src/station/Lamp.js`, CPU only). It holds:
+  - the burner, lit at sunset and put out at sunrise while `auto`, with the flame taking about 45 s to
+    come up;
+  - the optic: two groups of two panels, turning once a minute, which gives the character
+    **Fl(2) W 30s** (a pair of flashes 2.5 s apart every 30 s, each about 0.6 s long);
+  - 140,000 cd a panel, a 1.5° beam spread, aimed 0.3° down at the sea horizon (*verify* the 1899 optic);
+  - the clockwork, which runs down over 45 min and slows the lens to a stop unless wound. `autoWind`
+    keeps it wound until the keeper's duties exist.
+
+  `lamp.settle()` (called by `App.cameraCut()`) skips the flame's rise after a time jump.
+- **Drawing it** (`src/materials/Beacons.js`): one uniform block, read by the haze and the lantern glass.
+  - *The beams in the haze.* Each panel is a Gaussian beam that is finite at the lens and falls off as
+    I / s² far out. Its single scattering is taken in AirHaze's two haze layers: 16 samples along the
+    view ray, bunched where the ray passes nearest the beam's axis. AirHaze's composite adds it (the
+    `HZ_BEACONS` define) up to 40 km, so the scene in front cuts the beams off.
+  - *The lens.* The lantern panes are a new glass kind (2). They show the lens behind them by tracing
+    the view ray to the lens's barrel: the burner in bands (the prisms) and the flash filling the lens
+    as a panel's beam crosses the eye. Close under the tower you are below the beams and see no flash,
+    which is correct.
+  - *Points of light.* A lamp too small to resolve is drawn as a Gaussian about half a pixel wide,
+    holding its illuminance at the eye. It is dimmed by the same haze layers along the line of sight as
+    the far shore, dropped by the Earth's curvature, and hidden by anything nearer. The small-angle
+    maths uses a cross product, because 1 − cos runs out of float precision at telescope zoom.
+  - Units: the local lights' scale, about 0.5 scene units per candela (`CD`).
+- **Beam brightness.** At physical strength the beams were about 500 times too faint to register. The
+  scene's moonless night sky is about ten times a real one against the lamps (`nightAmb` in `App.js`),
+  so `Beacons.beamGain` (40, `?beamGain=`) puts back the several-times-the-sky contrast of a real dark
+  night.
+- **The Watcher's lamp** (`src/story/WatcherLamp.js`): a 5000 cd signal lamp (a fiction), 2.5 m above
+  Gallan Head. At 1500 cd it was a fifth-magnitude star, which the tone curve's toe crushed to 7 / 255
+  in a clear-night view. She lights it once the sun is 3° down. It burns steady, twinkles (a long path low over the
+  sea), and shutters Morse: `send( text, { repeat } )`, or `?morse=TEXT` in the page URL.
+  - From the gallery it is a bright star on a clear night (90 km visibility). At the default 30 km it
+    is at the edge of sight, and below about 20 km it is gone. The weather gating is the
+    haze itself.
+  - Through a narrow field of view it gains up to 30 times (a telescope's aperture over the pupil).
+- **Morse** (`src/story/Morse.js`): `encode`, `decode` and `timeline` with standard timing; accents are
+  sent as plain letters.
+- **Tests:** `test/lamp.mjs` (in `npm test`) checks the character from a ship 20 km off, the burner,
+  the clockwork running down, Morse, and the Watcher shuttering a message.
+- **Review views** (`src/core/DebugViews.js`). A view's `beam` setting turns the lens to a bearing, so
+  shots are repeatable:
+  - `fLantern` (from the yard), `fBeams` (from the slope south-west), `fBeamsSea` (3 km out at sea),
+    `fFlash` (the same, with a panel on the eye), `fBeamsAerial`;
+  - `fWatcher`, `fWatcherVis30` and `fWatcherScope` (Gallan Head at night: by eye on a clear night and
+    at the usual 30 km visibility, and through a 3° telescope).
+
+  Example:
+  `npm run shots -- --views=fBeams,fFlash,fWatcherScope --params="setting=flannan&lite" --adapt --frames=12`.
+- **Not done yet:**
+  - the beams light no surfaces: a LocalLights spot has a wide spill that would flood the island, so it
+    needs a spill-free mode;
+  - no shadowing of the beams (the lantern's astragals, the terrain);
+  - no telescope camera mode or signal lamp for the player (Phase 4).
+
 ## 2026-09-29 (later): Eilean Mòr, the light station and the far shore
 
 The user asked for "the lighthouse station and distant other side you can only look across to, and only

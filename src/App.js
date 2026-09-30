@@ -71,6 +71,9 @@ import { WakeSim } from './ocean/WakeSim.js';
 import { Vegetation } from './world/Vegetation.js';
 import { SoundScape } from './audio/SoundScape.js';
 import { updateCameraVelocity, useStaticVelocity } from './post/CameraVelocity.js';
+import { Beacons } from './materials/Beacons.js';
+import { Lamp } from './station/Lamp.js';
+import { WatcherLamp } from './story/WatcherLamp.js';
 
 const _up = new Vector3( 0, 1, 0 );
 const _sun = new Vector3(), _moon = new Vector3(), _key = new Vector3();
@@ -396,10 +399,26 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// the camera's height above the water in the same frame (GPU query): decides the side the surface
 		// is seen from where the triangle facing can't be trusted
 		this.waterMaterial.cameraWaterHeightNode = this.query.cameraState().x;
+		// the Flannan light (its lens, its clockwork, its beams) and the Watcher's lamp on Gallan Head, drawn
+		// by the haze and the lantern glass (src/materials/Beacons.js). ?morse=TEXT: she signals it, over
+		// and over; ?beamGain=: the beams' in-scatter over the physical
+		this.beacons = new Beacons();
+		if ( this.flannan ) {
+
+			this.lamp = new Lamp( { position: new Vector3( STATION.tower.x, this.village.station.focal, STATION.tower.z ) } );
+			const gh = this.flannan.places.gallanHead;
+			this.watcher = new WatcherLamp( { position: new Vector3( gh.x, this.flannan.grids.uig.at( gh.x, gh.z ) + 2.5, gh.z ) } );
+			if ( qs.has( 'morse' ) ) this.watcher.send( qs.get( 'morse' ), { repeat: true } );
+			this.beacons.lamp = this.lamp;
+			this.beacons.watcher = this.watcher;
+			if ( qs.has( 'beamGain' ) ) this.beacons.beamGain = Number( qs.get( 'beamGain' ) );
+
+		}
+
 		// aerial perspective, marine haze and volumetric sun shafts (post)
 		this.haze = qs.has( 'noHaze' ) ? null : new AirHaze( {
 			depthTexture: this.sceneRenderer.sceneRT.depthTexture, underwater: this.underwater, atmosphere: this.atmosphere,
-			sky: this.sky, clouds: this.clouds, terrain: this.terrainGPU, csm: this.csm,
+			sky: this.sky, clouds: this.clouds, terrain: this.terrainGPU, csm: this.csm, beacons: this.flannan ? this.beacons : null,
 		} );
 		this.post = new PostFX( renderer, { sceneRenderer: this.sceneRenderer, camera, underwater: this.underwater, clouds: this.clouds, sunDir: this.atmosphere.sunDir, haze: this.haze } );
 		// visibility at sea level (km): ?vis=, or 30 km at the Flannans (Lewis shows on clearer days only);
@@ -468,6 +487,9 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		if ( this.post && this.post.cut ) this.post.cut();
 		if ( this.clouds && this.clouds.resetHistory ) this.clouds.resetHistory();
+		// the lamps take the new time of day at once (no flame coming up over a minute)
+		if ( this.lamp ) this.lamp.settle();
+		if ( this.watcher ) this.watcher.settle();
 
 	}
 
@@ -776,6 +798,19 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.boat.update( dt );
 		if ( this.wildlife ) this.wildlife.update( dt, this.camera, this.freeCam ? null : this.player );
 		this.localLights.update( this.camera, dt );
+		// the lamps: lit at sunset, out at sunrise; the lens turns on its clockwork
+		if ( this.lamp ) {
+
+			const sunElevation = Math.asin( MathUtils.clamp( this.atmosphere.sunDir.value.y, - 1, 1 ) ) * 180 / Math.PI;
+			this.lamp.update( dt, { sunElevation } );
+			this.watcher.update( dt, { sunElevation } );
+			// a telescope gathers more of a point's light than the eye (its aperture over the pupil's)
+			const fov0 = this.defaultFov ?? this.camera.fov;
+			this.beacons.watcherGain = MathUtils.clamp( ( fov0 / this.camera.fov ) ** 2, 1, 30 );
+
+		}
+
+		this.beacons.update( dt, { camera: this.camera, haze: this.haze } );
 
 		// ---- render
 		G.exposure.value = s.exposure;

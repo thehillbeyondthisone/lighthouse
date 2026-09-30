@@ -748,14 +748,23 @@ can run in parallel from Phase 2 onward.
   - winter turf instead of the tropical ground;
   - no vegetation, fishing game or boat.
 
+- Phase 3 and 4, first pieces (30 September):
+  - the `Lamp` (`src/station/Lamp.js`): the burner lit at sunset, the lens turning on its clockwork, the
+    Fl(2) W 30s character from two groups of two panels;
+  - the beams in the haze, the lens flashing through the lantern glass, and the light as a point from
+    afar (`src/materials/Beacons.js`);
+  - the Watcher's lamp on Gallan Head, seen only through clear air, shuttering Morse
+    (`src/story/WatcherLamp.js`, `src/story/Morse.js`).
+
 ### The next five tasks
 
 1. The Flannan ground and coast:
    - cliff surf instead of the bay's breakers (`CliffSurge`, §5.4);
    - rock and turf detail, and grass that is not tropical;
    - sea birds on the ledges.
-2. The lighthouse beams and the lamp (§6 `Lamp`), and the Watcher's lamp at Gallan Head across the sea
-   (§3.4).
+2. The keeper's lamp work on top of the new `Lamp`: lighting it, winding the clockwork, the lamp's light
+   on the lantern and the gallery, and the telescope and signal lamp for talking to the Watcher (§3.3,
+   §3.4).
 3. The Poster colour script across all eight keys (§4.8) on the Flannan views, including a stylized water
    mode (§4.5 step 9). Its fog should follow the visibility, so the far shore shows on clear days.
 4. The interiors of the tower and the keepers' house (§5.3).

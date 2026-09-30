@@ -3,6 +3,7 @@ import { ShaderModule } from '../../engine/gpu/Shader.js';
 import { commonModule } from '../../engine/render/wgsl/common.js';
 import { standard } from '../../materials/Materials.js';
 import { VillageTextures } from './TextureBaker.js';
+import { beaconsModule } from '../../materials/Beacons.js';
 
 // Shared PBR materials for the village, pier and props.
 //
@@ -117,7 +118,8 @@ function villageMaterial( params, T, names, { surface, vertex = '' } ) {
 // patterns: 0 plain, 1 lap siding, 2 board & batten, 3 vertical tongue & groove,
 //           4 louvers, 5 planks along u (staves, clinker), 6 horizontal planks (flush),
 //           7 nailed deck plank (nail heads + rust stains every 0.8 m),
-//           9 GLASS (window panes / lantern glass): vdata = seed, kind (0 window, 1 lantern), 9, lit
+//           9 GLASS (window panes / lantern glass): vdata = seed, kind (0 window, 1 lantern, 2 the
+//             lighthouse's lantern: the lens behind it, src/materials/Beacons.js), 9, lit
 // tint: paint color when painted, otherwise a wood tone multiplier.
 // uv: metres, u along the grain; end-grain faces are flagged with u + 1000, post tops with u + 2000.
 
@@ -330,6 +332,8 @@ export function createWoodMaterial( T ) {
 	s.roughness = clamp( mix( res.rough, glass.rough, isGlass ), 0.03, 1.0 );
 	s.ao = mix( ao, 1.0, isGlass );
 	s.emissive = glass.emissive * isGlass;
+	// the lighthouse's lantern: the lens behind the pane (no texture reads: the branch is safe)
+	if ( isGlass > 0.5 && paint > 1.5 ) { s.emissive += beaconsLantern( in.P ); }
 	s.normal = vlmNormalFromSlope( in.P, in.N, in.uv, ( sM + sPat ) * ( 1.0 - isGlass ) );
 ` } );
 	m.name = 'VillageWood';
@@ -481,11 +485,12 @@ export function createHardMaterial( T ) {
 
 // ---------------------------------------------------------------------------
 // GLASS (evaluated inside the wood material): window panes and lantern glass, emissive at night.
-// uv: normalized 0..1 across a pane. kind 0 window / 1 lantern, lit 0/1, tint: curtain / glass color
+// uv: normalized 0..1 across a pane. kind 0 window / 1 lantern / 2 the lighthouse's lantern (its glow is
+// the lens's: the wood material adds beaconsLantern), lit 0/1, tint: curtain / glass color
 
 const glassModule = new ShaderModule( {
 	name: 'villageGlass',
-	deps: [ villageMaterialModule ],
+	deps: [ villageMaterialModule, beaconsModule ],
 	code: /* wgsl */`
 struct VlmGlass { color: vec3f, rough: f32, emissive: vec3f };
 
@@ -511,7 +516,7 @@ fn vlmGlass( uvm: vec2f, aTint: vec3f, seed: f32, kind: f32, lit: f32 ) -> VlmGl
 		* ( vlmHash21( seed, 3.1 ) * 0.5 + 0.75 ) * 3.2 * ( 1.0 - Gl.r * 0.25 );
 	let flicker = sin( frame.time * 9.0 + seed * 40.0 ) * sin( frame.time * 5.3 + seed * 13.0 ) * 0.12 + 0.9;
 	let lanternGlow = vec3f( 1.0, 0.64, 0.3 ) * 6.0 * flicker;
-	let emissive = mix( winGlow, lanternGlow, isLantern ) * nightOn * max( lit, isLantern );
+	let emissive = mix( winGlow, lanternGlow, isLantern ) * nightOn * max( lit, isLantern ) * step( kind, 1.5 );
 	return VlmGlass( color, rough, emissive );
 }
 `,
