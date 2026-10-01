@@ -42,7 +42,7 @@ is real; Walter Innes, Ceit Macleod and the Board's letter are fiction (`docs/PL
 | Mouse | Look (click to capture the mouse, Esc to release it) |
 | E | Use: doors and the gate, the letter, the slate, the journal, the signal lamp. **Hold** E to light the lamp and to wind the machine |
 | Right mouse | Look through the telescope (once you have it) |
-| L | Hand lamp |
+| L | Storm lantern (take it from the keepers' room table) |
 | Space | Read the Watcher's signals faster |
 | M | Mute |
 | H | Settings panel |

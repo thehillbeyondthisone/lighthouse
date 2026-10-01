@@ -25,6 +25,7 @@ import { loadFlannanData } from './world/flannan/FlannanData.js';
 import { FlannanTerrainData } from './world/flannan/FlannanTerrain.js';
 import { buildStation, assembleStation, STATION, TOWER, ROOM } from './world/flannan/Station.js';
 import { Lamp } from './station/Lamp.js';
+import { HandLamp } from './station/HandLamp.js';
 import { Beams } from './station/Beams.js';
 import { FarShore, CURVATURE } from './world/flannan/FarShore.js';
 import { TerrainGPU } from './world/TerrainGPU.js';
@@ -336,13 +337,22 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 				this.localLights.add( { position: new Vector3( x, TOWER.floor + 1.6, z ), dir: new Vector3( 0, - 0.3, nz ).normalize(), cosInner: 0.2, cosOuter: - 0.5, color: new Color( 0.85, 0.9, 1.0 ), intensity: 1.6, range: 7, kind: 'daylight', day: true } );
 
 			}
-			// a 1900 keeper's hand lamp, not a torch: warmer, wider, dimmer
+			// a 1900 keeper's storm lantern, not a torch: carried at your side, lighting all round it
+			// (src/station/HandLamp.js). It starts in your hand; the story stands it on the keepers' room
+			// table for you to take. ?handlamp: carried and lit (the review shots)
+			this.handLamp = new HandLamp();
+			this.handLamp.carried = true;
+			this.handLamp.setRest( new Vector3( - 4.95, TOWER.floor + 0.74, 3.12 ), 0.4 );
+			if ( this.qs.has( 'handlamp' ) ) this.handLamp.lit = true;
+			this.handLamp.glow = this.handLamp.lit ? 1 : 0;
+			scene.add( this.handLamp.group );
 			const fl = this.localLights.flashlight;
-			fl.color.setRGB( 1.0, 0.62, 0.32 );
-			fl.intensity = 22;
-			fl.range = 14;
-			fl.cosInner = Math.cos( MathUtils.degToRad( 30 ) );
-			fl.cosOuter = Math.cos( MathUtils.degToRad( 75 ) );
+			fl.color.setRGB( 1.0, 0.6, 0.3 );
+			fl.intensity = 30;
+			fl.range = 18;
+			fl.cosInner = - 1.5; // a point light (dir.w < -1)
+			fl.cosOuter = - 2;
+			fl.at = this.handLamp.lightPosition;
 			// ?lamp: lit and turning (the review shots)
 			if ( this.qs.has( 'lamp' ) ) {
 
@@ -666,6 +676,24 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 	}
 
+	// L at the Flannans: light the storm lantern in your hand, or put it out
+	toggleHandLamp() {
+
+		const H = this.handLamp, toast = ( t, ms ) => this.ui && this.ui.ui.toast( t, ms );
+		if ( ! H.carried ) {
+
+			toast( 'You have no lamp. There is a storm lantern on the table in the keepers\' room.', 4200 );
+			return;
+
+		}
+
+		H.lit = ! H.lit;
+		if ( this.stationSound ) this.stationSound.handLamp( H.lit, H.lightPosition );
+		toast( H.lit ? 'You light the lantern' : 'You put the lantern out' );
+		if ( this.story ) this.story.save();
+
+	}
+
 	// Free (debug) camera on F; the walker / boat resumes where it was left.
 	setFreeCam( on ) {
 
@@ -775,8 +803,13 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		if ( this.input.hit( 'KeyT' ) ) this.toggleTime();
 		if ( this.input.hit( 'KeyL' ) ) {
 
-			const on = this.localLights.toggleFlashlight();
-			if ( this.ui ) this.ui.ui.toast( this.flannan ? ( on ? 'Hand lamp lit' : 'Hand lamp out' ) : ( on ? 'Flashlight on' : 'Flashlight off' ) );
+			if ( this.handLamp ) this.toggleHandLamp();
+			else {
+
+				const on = this.localLights.toggleFlashlight();
+				if ( this.ui ) this.ui.ui.toast( on ? 'Flashlight on' : 'Flashlight off' );
+
+			}
 
 		}
 
@@ -842,6 +875,18 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		if ( this.whale ) this.whale.update( dt, this.camera );
 		this.boat.update( dt );
 		if ( this.wildlife ) this.wildlife.update( dt, this.camera, this.freeCam ? null : this.player );
+		if ( this.handLamp ) {
+
+			// the storm lantern: in your hand unless you are flying, at the signal lamp or at the telescope
+			const st = this.story;
+			const show = ( ! this.freeCam || this.handInView ) && ! ( st && ( st.signal || st.tel > 0.3 ) );
+			this.handLamp.update( dt, this.camera, { show } );
+			const fl = this.localLights.flashlight;
+			fl.on = this.handLamp.glow > 0.002;
+			fl.scale = this.handLamp.glow * this.handLamp.flicker;
+
+		}
+
 		this.localLights.update( this.camera, dt );
 
 		// ---- render

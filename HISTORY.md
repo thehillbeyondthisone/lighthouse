@@ -12,8 +12,9 @@ entries first.
   next tasks, and its §10 lists the decisions still open.
 - **The demo.** The default page is now Seven Hunters' first night (`src/story`); `?setting=tidewater` is the
   fishing game, `?nostory` the Flannans to walk freely. See the newest entry below.
-- **Branch.** The demo was built on `claude/beautiful-bell-1cb1e6` (the planning and the first Flannan work on
-  `claude/firewatch-style-game-framework-iurrd1`, merged as PR 1).
+- **Branch.** The demo was built on `claude/beautiful-bell-1cb1e6` (merged as PR 2; the planning and the
+  first Flannan work on `claude/firewatch-style-game-framework-iurrd1`, merged as PR 1). Play feedback on
+  it (the storm lantern, lighting the lamp) is on `claude/focused-einstein-i08fmq`.
 - **Run it.** `npm install`, then `npm run dev` (http://127.0.0.1:5189) or `npm test`.
 - **GPU tests in a cloud container with no GPU.** Point Dawn at the SwiftShader driver that ships with
   Playwright's Chromium:
@@ -33,6 +34,37 @@ entries first.
   npm run shots -- --views=beach,aerial --styles=photoreal,poster,albumen --times=12.4,14.8 \
                    --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
   ```
+
+## 2026-10-01 (later): a storm lantern to carry; lighting the lamp made findable
+
+The user played the demo: the spyglass was found naturally, but they wound the machine and could not work
+out how to light the lamp, and asked for more light, "maybe a lantern we can carry or whatever is
+historically appropriate". Branch `claude/focused-einstein-i08fmq`.
+
+- **Lighting the lamp.** The lens's use target was its centre on the focal plane, about 2.8 m above the
+  lantern floor and over a metre above your eyes: facing the lens you got no prompt unless you looked
+  steeply up. It is now a larger target from the lens table to its crown (`TOWER.deck + 2.1`, size 1.0),
+  so facing the lens at eye level finds it. In the lantern the objective says what to do ("Face the lens
+  and hold E ...", "hold E at the crank on the lens's pedestal": `GOALS.lightWait`, `lightHere`,
+  `machineHere`).
+- **Winding before lighting** left the night stuck on "Wind the machine" (the beat only moved on while
+  winding, and a full machine can't be wound). Lighting a lamp whose machine is already wound now writes
+  "Machine set going." and moves on to the watch.
+- **The storm lantern** (`src/station/HandLamp.js`): a tubular paraffin lantern of the 1890s (tin fount,
+  glass globe in a wire guard, cap, bail) in place of the old torch-like hand lamp. It stands on the
+  keepers' room table; "Take the storm lantern" (E), then L lights it or puts it out (a match, the wick,
+  the globe: `StationSound.handLamp`). Carried, it hangs at your side from the hand, swings as you walk
+  (a damped pendulum driven by the hand's acceleration), and shows when you look down. It lights all
+  round it: LocalLights' flashlight became a point light at the flame (`flashlight.at`, `scale` for the
+  warm-up and flicker; intensity 30, range 18; Tidewater's flashlight is unchanged). Its own meshes take
+  no local lights (`NO_LOCAL_LIGHTS`: its flame would blow them out); the globe glows. Without the story
+  (`?nostory`, the shots) it starts in your hand; `?handlamp` lights it. A toast at dusk points at L, or
+  at the table if you haven't taken it; pressing L without it says where it is. Saved with the night
+  (`hand`); an older save puts it in your hand.
+- **Review views** `dHandRoom`, `dHandYard` (`hand: true` shows the lantern in the free
+  camera; use with `?handlamp`).
+- **Tests:** `test/demo-story.mjs` takes the lantern from the table, finds the lens facing it at eye level,
+  checks the lantern objective, and plays a night wound before it is lit.
 
 ## 2026-10-01: a playable demo, the first night
 

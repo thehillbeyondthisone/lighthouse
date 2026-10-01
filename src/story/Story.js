@@ -92,6 +92,10 @@ export class Story {
 		this.islet = null; // { t: seconds showing, seen }
 		this.saveT = 0;
 		this.baseFov = app.camera.fov;
+		this.hand = app.handLamp; // the storm lantern: on the keepers' room table until taken
+		this.hand.carried = false;
+		this.hand.lit = false;
+		this.hand.glow = 0;
 		this.doors = {};
 		for ( const d of this.moving.doors ) ( this.doors[ d.name ] = this.doors[ d.name ] || [] ).push( d );
 		this.her = this._herPosition();
@@ -220,7 +224,16 @@ export class Story {
 		if ( due && b !== 'dawn' && b !== 'journal' ) return S.GOALS.obs.replace( 'six', due === 18 ? 'six' : 'nine' );
 		if ( this.watcher.state === 'calling' || this.watcher.state === 'waiting' || ( this.watcher.state === 'steady' && this.lamp.lit ) ) return this.hasTelescope ? S.GOALS.answer : S.GOALS.gallan;
 		if ( b === 'haar' ) return 'The haar is in. Watch the beams from the walkway.';
+		if ( b === 'light' && this._inLantern() ) return this.h < S.SUNSET - 0.25 ? S.GOALS.lightWait : S.GOALS.lightHere;
+		if ( b === 'machine' && this._inLantern() ) return S.GOALS.machineHere;
 		return S.GOALS[ b ] || '';
+
+	}
+
+	_inLantern() {
+
+		const p = this.app.player.position;
+		return Math.hypot( p.x, p.z ) < 2.2 && p.y > TOWER.deck - 0.3 && p.y < TOWER.deck + 4.5;
 
 	}
 
@@ -267,10 +280,18 @@ export class Story {
 		I.add( { id: 'stove', at: R.stove, size: 0.4, text: 'The stove', use: read( S.NOTES.stove ) } );
 		I.add( { id: 'westDoor', at: R.westDoor, size: 0.5, text: 'The bedrooms', use: read( S.NOTES.westDoor ) } );
 		I.add( { id: 'kitchenDoor', at: R.kitchenDoor, size: 0.5, text: 'The kitchen', use: read( S.NOTES.kitchenDoor ) } );
+		I.add( { id: 'handLamp', at: () => _v.copy( this.hand.rest.position ).setY( this.hand.rest.position.y + 0.15 ), size: 0.22, when: () => ! this.hand.carried, text: 'Take the storm lantern', use: () => {
+
+			this.hand.carried = true;
+			this.toast( 'L lights the lantern and puts it out.', 5000 );
+			this.save();
+
+		} } );
 		I.add( { id: 'chair', at: () => _v.set( R.letter.x + 0.3, T.floor + 0.6, R.letter.z + 0.5 ), size: 0.35, text: () => this._watchText(), when: () => !! this._watchText(), use: () => this._keepWatch() } );
 
 		// the lantern
-		I.add( { id: 'lens', at: () => _v.set( 0, st.focal, 0 ), reach: 2.6, size: 0.75, hold: 2.2,
+		// (the target: the lens from its table to its crown; the focal plane is above your head)
+		I.add( { id: 'lens', at: () => _v.set( 0, TOWER.deck + 2.1, 0 ), reach: 2.4, size: 1.0, hold: 2.2,
 			text: () => this._lensText(),
 			when: () => !! this._lensText(),
 			use: () => this._useLens(),
@@ -352,8 +373,20 @@ export class Story {
 			const late = h > S.SUNSET + 0.25;
 			this.row( h, late ? 'Lamp lit (late).' : 'Lamp lit.' );
 			if ( late ) this.flags.late = true;
-			this.setBeat( 'machine' );
-			this.toast( 'The burner takes. Now wind the machine.' );
+			if ( L.wind > 0.5 ) {
+
+				// (wound before it was lit: the machine is going already)
+				this.row( h, 'Machine set going.' );
+				this.setBeat( 'watch' );
+				this.toast( 'The burner takes, and the lens is turning.' );
+
+			} else {
+
+				this.setBeat( 'machine' );
+				this.toast( 'The burner takes. Now wind the machine: the crank on the pedestal.' );
+
+			}
+
 			return;
 
 		}
@@ -807,6 +840,14 @@ export class Story {
 
 		}
 
+		// the lantern, when it gets dark
+		if ( ! this.flags.lanternHint && this.beat !== 'intro' && this.h > S.SUNSET + 0.25 && ! this.hand.lit && ! modal ) {
+
+			this.flags.lanternHint = true;
+			this.toast( this.hand.carried ? 'It is getting dark. L lights your lantern.' : 'It is getting dark. There is a storm lantern on the table in the keepers\' room.', 5000 );
+
+		}
+
 		// beats that move on by themselves
 		const p = app.player.position, c = STATION.compound;
 		if ( this.beat === 'climb' && p.x > c.x0 && p.x < c.x1 && p.z > c.z0 && p.z < c.z1 ) this.setBeat( 'room' );
@@ -870,7 +911,7 @@ export class Story {
 		const p = this.app.player;
 		const data = {
 			v: 1, h: this.h, beat: this.beat, flags: this.flags, rows: this.rows, obs: this.obs, tel: this.hasTelescope, haar: this.haar, saidName: this.saidName,
-			lamp: this.lamp.save(), watcher: this.watcher.save(),
+			lamp: this.lamp.save(), watcher: this.watcher.save(), hand: this.hand.save(),
 			doors: this.moving.doors.map( ( d ) => d.target ),
 			pos: [ p.position.x, p.position.y, p.position.z ], yaw: p.yaw,
 			islet: this.islet,
@@ -913,6 +954,8 @@ export class Story {
 		Object.assign( this, { h: s.h, beat: s.beat, flags: s.flags || {}, rows: s.rows || [], obs: s.obs || {}, hasTelescope: !! s.tel, haar: s.haar || HAAR, saidName: !! s.saidName, islet: s.islet || null } );
 		this.lamp.load( s.lamp );
 		this.watcher.load( s.watcher );
+		// (a night saved before the lantern: it is in your hand)
+		this.hand.load( s.hand || { carried: true } );
 		if ( this.watcher.state === 'sending' || this.watcher.state === 'waiting' || this.watcher.state === 'replying' ) this.watcher.state = 'steady';
 		this.moving.doors.forEach( ( d, i ) => {
 

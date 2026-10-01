@@ -177,10 +177,13 @@ export class LocalLights {
 			}
 
 			fl.dir.lerp( _f, 1 - Math.exp( - dt / 0.06 ) ).normalize();
-			fl.position.setFromMatrixPosition( camera.matrixWorld ).addScaledVector( _r, 0.2 ).addScaledVector( _u, - 0.22 ).addScaledVector( _f, 0.15 );
+			// (at: a carried lantern's flame, set by its owner: src/station/HandLamp.js)
+			if ( fl.at ) fl.position.copy( fl.at );
+			else fl.position.setFromMatrixPosition( camera.matrixWorld ).addScaledVector( _r, 0.2 ).addScaledVector( _u, - 0.22 ).addScaledVector( _f, 0.15 );
 			// faint against daylight (the scene's night is exposed far brighter than physical), but not
 			// indoors (boost: set by the app inside the station)
-			const k = fl.intensity * Math.max( 0.08 + 0.92 * smooth( G.night.value, 0.0, 0.6 ), fl.boost || 0 );
+			// (scale: a flame's warming and flicker)
+			const k = fl.intensity * ( fl.scale ?? 1 ) * Math.max( 0.08 + 0.92 * smooth( G.night.value, 0.0, 0.6 ), fl.boost || 0 );
 			pos[ 0 ].set( fl.position.x, fl.position.y, fl.position.z, fl.range * fl.range );
 			col[ 0 ].set( fl.color.r * k, fl.color.g * k, fl.color.b * k, fl.cosInner );
 			dir[ 0 ].set( fl.dir.x, fl.dir.y, fl.dir.z, fl.cosOuter );

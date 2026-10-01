@@ -22,6 +22,7 @@ const { Colliders } = await import( '../src/world/Colliders.js' );
 const { mulberry32 } = await import( '../src/util/Noise.js' );
 const { Player } = await import( '../src/player/Player.js' );
 const { Lamp } = await import( '../src/station/Lamp.js' );
+const { HandLamp } = await import( '../src/station/HandLamp.js' );
 const { Beams, hazeTransmittance } = await import( '../src/station/Beams.js' );
 const { Story, clockText, weatherAt } = await import( '../src/story/Story.js' );
 const { morse } = await import( '../src/story/Watcher.js' );
@@ -67,7 +68,10 @@ const query = { n: 0, cpu: new Float32Array( 64 ), cpuValid: true, allocate( n, 
 const camera = new E.PerspectiveCamera( 70, 16 / 9, 0.1, 150000 );
 const player = new Player( { camera, input, terrain: terrainData, colliders, query, boat: null } );
 const toasts = [];
+const handLamp = new HandLamp();
+handLamp.setRest( new E.Vector3( - 4.95, TOWER.floor + 0.74, 3.12 ), 0.4 );
 const app = {
+	handLamp,
 	village: { station: st }, lamp: new Lamp( { origin: new E.Vector3( 0, st.focal, 0 ) } ), input, camera, player, terrainData, colliders,
 	settings: { timeOfDay: 12, timeSpeed: 0 }, setting: { dayOffset: 0 }, haze: { density: { value: 1 } }, clouds: { coverage: { value: 0.4 } },
 	flannan: F, curvature: CURVATURE, freeCam: false, ui: { ui: { toast: ( t ) => toasts.push( t ) } },
@@ -127,6 +131,29 @@ step( 0.2 );
 ok( story.beat === 'letter', `in the keepers' room: '${ story.beat }'` );
 await item( 'letter' ).use();
 ok( story.beat === 'light' && shown.read.includes( S.LETTER.title ), 'the Board\'s letter read: now light the lamp' );
+
+// the storm lantern on the table: looked at from across it, taken
+ok( ! handLamp.carried && item( 'handLamp' ).when(), 'the storm lantern stands on the table' );
+player.position.set( - 4.0, TOWER.floor, 2.4 );
+player.yaw = Math.atan2( - ( - 4.95 + 4.0 ), - ( 3.12 - 2.4 ) );
+player.pitch = - 0.6;
+step( 0.1 );
+ok( story.interact.current && story.interact.current.id === 'handLamp', `looking at it, the prompt: '${ story.interact.current && story.interact.current.id }'` );
+item( 'handLamp' ).use();
+ok( handLamp.carried && ! item( 'handLamp' ).when(), 'the lantern taken' );
+
+// in the lantern, the lens is found looking at it at eye level (its focal plane is above your head)
+{
+
+	const a = TOWER.crankAngle + 2.2, r = 1.25;
+	player.position.set( Math.cos( a ) * r, TOWER.deck, Math.sin( a ) * r );
+	player.yaw = Math.atan2( Math.cos( a ), Math.sin( a ) );
+	player.pitch = 0;
+	step( 0.1 );
+	ok( story.interact.current && story.interact.current.id === 'lens', `facing the lens: '${ story.interact.current && story.interact.current.id }'` );
+	ok( story.goal() === S.GOALS.lightWait, `in the lantern before sunset: '${ story.goal() }'` );
+
+}
 
 // the lamp: wait for sunset, light it, wind the machine
 ok( item( 'lens' ).text() === 'Wait for sunset', `before sunset the lens offers: '${ item( 'lens' ).text() }'` );
@@ -228,6 +255,24 @@ ok( rows.some( ( r ) => r.includes( 'Lamp lit' ) ) && rows.some( ( r ) => r.incl
 ok( rows.some( ( r ) => r.includes( 'Eilean Tighe' ) ) && rows.some( ( r ) => r.includes( 'gate' ) ), 'the remarks entered' );
 ok( rows.some( ( r ) => r.startsWith( '03.00' ) && ( SAY_NAME ? r.includes( 'country' ) : r.includes( 'west landing' ) ) ), 'and a line at three o\'clock' );
 ok( localStorage.getItem( 'sevenhunters.night1.v1' ) === null, 'the save is cleared at the end' );
+
+// a night where the machine is wound before the lamp is lit: lighting it sets the watch going
+{
+
+	const s3 = new Story( app );
+	s3.ui.card = s3.ui.fade = async () => {};
+	s3.ui.read = async () => {};
+	app.lamp.lit = false;
+	app.lamp.wind = 0;
+	await s3.start();
+	s3.setBeat( 'light' );
+	for ( let i = 0; i < 200 && app.lamp.wind < 1; i ++ ) s3.interact.get( 'crank' ).onHold( 1 / 30 );
+	s3.h = S.SUNSET;
+	await s3.interact.get( 'lens' ).use();
+	ok( app.lamp.lit && s3.beat === 'watch', `wound first, then lit: '${ s3.beat }'` );
+	s3.clearSave();
+
+}
 
 // a night where she is never answered: the haar takes her, the objective moves on
 {

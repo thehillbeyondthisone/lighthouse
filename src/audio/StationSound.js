@@ -167,6 +167,28 @@ export class StationSound {
 
 	}
 
+	// the storm lantern in your hand: a match and the wick taking, or the wick turned down and a breath
+	handLamp( on, at ) {
+
+		if ( ! this._ok() || ! at ) return;
+		const p = this.s._panner( this.s.aboveOut, 0.5, 1.2 );
+		this._at( p, at.x, at.y, at.z );
+		const t = this.c.currentTime + 0.02;
+		if ( on ) {
+
+			this._burst( p, t, 0.025, 'highpass', 2800, 0.7, 0.18, 0.02 ); // the match
+			this._burst( p, t + 0.35, 0.3, 'bandpass', 420, 0.8, 0.22, 0.2 ); // the wick
+			this._partial( p, t + 0.75, 1650, 0.03, 0.12 ); // the globe set down on its seat
+
+		} else {
+
+			this._partial( p, t, 1650, 0.03, 0.12 ); // the globe lifted
+			this._burst( p, t + 0.2, 0.18, 'lowpass', 600, 0.7, 0.2, 0.12 ); // blown out
+
+		}
+
+	}
+
 	shutter() {
 
 		if ( ! this._ok() ) return;

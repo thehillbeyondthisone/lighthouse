@@ -2154,7 +2154,7 @@ export class UI {
 					</section>
 					<section>
 						<h3>Interact</h3>
-						${ this.tidewater ? '' : row( k( 'E' ), 'Use<small>Hold to light the lamp, to wind the machine</small>' ) + row( k( 'RMB' ), 'Telescope<small>Hold, once you have it</small>' ) + row( k( 'L' ), 'Hand lamp' ) + row( k( 'Space' ), 'Read her signals faster' ) + row( k( 'F' ), 'Free camera' ) + row( k( 'M' ), 'Mute' ) }
+						${ this.tidewater ? '' : row( k( 'E' ), 'Use<small>Hold to light the lamp, to wind the machine</small>' ) + row( k( 'RMB' ), 'Telescope<small>Hold, once you have it</small>' ) + row( k( 'L' ), 'Storm lantern<small>Once you have taken it</small>' ) + row( k( 'Space' ), 'Read her signals faster' ) + row( k( 'F' ), 'Free camera' ) + row( k( 'M' ), 'Mute' ) }
 						${ ! this.tidewater ? '' : `
 						${ row( k( 'E' ), 'Interact<small>Board, helm, step ashore, trade</small>' ) }
 						${ row( k( 'V' ), 'Boat camera<small>1st / 3rd person</small>' ) }
@@ -2176,7 +2176,7 @@ export class UI {
 					</section>
 				</div>
 				<div class="tw-help-guide">
-					<span>${ this.tidewater ? '<b>How to play:</b> catch fish, sell them to Joe at the fish stand by the pier, and buy upgrades from Marta at the chandlery by the boathouse. Both are on the map (lower right).' : '<b>The night:</b> light the lamp at sunset, keep the machine wound, answer Gallan Head when the air is clear, and write up the journal in the morning. <kbd>E</kbd> uses things (hold it to light and to wind), the right mouse button raises the telescope, <kbd>L</kbd> is your hand lamp, <kbd>Space</kbd> reads her signals faster.' }</span>
+					<span>${ this.tidewater ? '<b>How to play:</b> catch fish, sell them to Joe at the fish stand by the pier, and buy upgrades from Marta at the chandlery by the boathouse. Both are on the map (lower right).' : '<b>The night:</b> light the lamp at sunset, keep the machine wound, answer Gallan Head when the air is clear, and write up the journal in the morning. <kbd>E</kbd> uses things (hold it to light and to wind), the right mouse button raises the telescope, <kbd>L</kbd> lights your storm lantern, <kbd>Space</kbd> reads her signals faster.' }</span>
 					<button type="button" class="gm-btn is-ghost tw-help-replay">Replay the guide</button>
 				</div>
 			</div>`;

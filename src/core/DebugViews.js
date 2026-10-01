@@ -63,6 +63,9 @@ export const VIEWS = {
 	dLanding: { p: [ 128, 5.0, 51.5 ], at: [ 70, 50, 28 ], time: 13.7 },
 	dYardMoon: { p: [ 8, 82.3, 14 ], at: [ - 10, 83, 2 ], time: 19.0, vis: 60 },
 	dRoomNight: { p: [ 0.4, 82.67, 4.6 ], at: [ - 6.5, 81.6, - 0.6 ], time: 19.0 },
+	// the storm lantern in your hand (hand: shown in the free camera; ?handlamp lights it), looking down
+	dHandRoom: { p: [ - 1.6, 82.67, 4.3 ], yaw: 1.32, pitch: - 0.85, time: 19.0, hand: true },
+	dHandYard: { p: [ 6, 82.3, 12 ], yaw: 0.9, pitch: - 0.5, time: 19.0, vis: 60, hand: true },
 };
 
 // a view's own visibility (km, `vis`) and field of view (degrees, `fov`), or the app's
@@ -115,6 +118,7 @@ export function installDebugViews( app ) {
 		if ( v.time !== undefined ) app.settings.timeOfDay = v.time;
 		applyViewVisibility( app, v );
 		if ( app.setFreeCam ) app.setFreeCam( true );
+		app.handInView = !! v.hand;
 		app.fly.setPose( new Vector3( ...v.p ), v.yaw, v.pitch );
 		app.fly.velocity.set( 0, 0, 0 );
 		if ( app.cameraCut ) app.cameraCut();
