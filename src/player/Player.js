@@ -287,6 +287,9 @@ export class Player {
 
 		const p = this.position;
 		if ( depth > 0.12 ) return 'water';
+		// stone stairs and floors (Colliders surfaces) name their own
+		const kind = this.colliders.surfaceAt && this.colliders.surfaceAt( p.x, p.z, p.y + 0.1 );
+		if ( kind ) return kind;
 		const onWood = this.colliders.groundHeightAt( p.x, p.z, p.y + 0.1 ) > this.terrain.heightAt( p.x, p.z ) + 0.05;
 		if ( onWood ) return 'wood';
 		const h = this.terrain.heightAt( p.x, p.z );
