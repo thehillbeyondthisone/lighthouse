@@ -88,6 +88,8 @@ export class Player {
 		this._ashoreT = 0;
 		// set by the fishing game: while a line is out the helm / step ashore prompts give way
 		this.busy = false;
+		// mouse look sensitivity (a telescope slows it)
+		this.lookScale = 1;
 
 	}
 
@@ -154,8 +156,8 @@ export class Player {
 		}
 
 		const look = inp.consumeLook();
-		this.yaw -= look.x * 0.0022;
-		this.pitch = THREE.MathUtils.clamp( this.pitch - look.y * 0.0022, - 1.5, 1.5 );
+		this.yaw -= look.x * 0.0022 * this.lookScale;
+		this.pitch = THREE.MathUtils.clamp( this.pitch - look.y * 0.0022 * this.lookScale, - 1.5, 1.5 );
 
 		// (not with a line out or a fish in hand: E belongs to the fishing then)
 		if ( this.nearBoat() && ! this.busy ) {

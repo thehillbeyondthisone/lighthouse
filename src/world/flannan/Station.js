@@ -1,4 +1,5 @@
-import { Color, Matrix4, Vector3 } from '../../engine/index.js';
+import { Color, Group, Matrix4, Mesh, Vector3 } from '../../engine/index.js';
+import { createLanternGlass, createLensMaterial } from './StationMaterials.js';
 import { Builder, Part, quad01Part, sagPoints } from '../village/GeoBuilder.js';
 import { windowUnit, doorUnit } from '../village/Buildings.js';
 import { lin, WOOD, HARD, C, bollard, ropeCoil, lantern } from '../Props.js';
@@ -853,6 +854,50 @@ function lensPedestal( ctx, parts, deck, gm ) {
 
 }
 
+// the lantern's fittings for the watch: a brass telescope on the sill (a moving part: taken up), a stool, and
+// on the walkway, a shuttered signal lamp on a bracket on the railing facing Gallan Head (east by north)
+function lanternFittings( ctx, parts, deck, top ) {
+
+	const { B } = ctx;
+	const brass = { tint: lin( 0xb08a3e ), data: HARD( 0.31, 0, 0.9, 0.3 ) };
+	const iron = { tint: P.black, data: IRON( 0.37, 0.3 ) };
+	const wood = { tint: lin( 0x6b5036 ), data: WOOD( 0.41, 0.4 ) };
+	const ga = TOWER.galleryDoor;
+	// the telescope, lying on the sill to the right of the door
+	const ta = ga + 0.42, tr = 2.04;
+	const T = new Builder();
+	T.rod( 'hard', [ - 0.36, 0, 0 ], [ 0.36, 0, 0 ], 0.032, 0.026, { segs: 10, ...brass } );
+	T.rod( 'hard', [ - 0.38, 0, 0 ], [ - 0.2, 0, 0 ], 0.036, 0.036, { segs: 10, ...brass } );
+	T.rod( 'hard', [ 0.18, 0, 0 ], [ 0.42, 0, 0 ], 0.022, 0.02, { segs: 8, tint: lin( 0x2a2016 ), data: WOOD( 0.43, 0.3 ) } );
+	parts.telescope = { B: T, position: new Vector3( Math.cos( ta ) * tr, top + 0.28, Math.sin( ta ) * tr ), ry: Math.atan2( - Math.cos( ta ), - Math.sin( ta ) ) }; // along the sill
+	TOWER.telescope = parts.telescope.position.clone();
+	// the stool, by the lens
+	const sa = ga + Math.PI * 0.75, sr = 1.45;
+	B.pushAt( Math.cos( sa ) * sr, deck, Math.sin( sa ) * sr, 0.3 );
+	B.cyl( 'wood', 0, 0.44, 0, 0.17, 0.17, 0.05, { segs: 12, ...wood } );
+	for ( let i = 0; i < 3; i ++ ) {
+
+		const a = i / 3 * Math.PI * 2;
+		B.rod( 'wood', [ Math.cos( a ) * 0.13, 0, Math.sin( a ) * 0.13 ], [ Math.cos( a ) * 0.09, 0.44, Math.sin( a ) * 0.09 ], 0.018, 0.016, { segs: 5, ...wood } );
+
+	}
+
+	B.pop();
+	TOWER.stool = new Vector3( Math.cos( sa ) * sr, deck + 0.5, Math.sin( sa ) * sr );
+	// the signal lamp: a black box with a lens and a shutter, on a bracket on the railing
+	const la = 0.166, lr = 3.55;
+	B.pushAt( Math.cos( la ) * lr, deck, Math.sin( la ) * lr, Math.PI / 2 - la );
+	B.box( 'hard', 0, 1.06, 0.12, 0.06, 0.06, 0.32, iron );
+	B.box( 'hard', 0, 1.27, 0, 0.3, 0.36, 0.32, iron );
+	B.cyl( 'hard', 0, 1.27, 0.16, 0.11, 0.11, 0.02, { rx: Math.PI / 2, segs: 16, ...brass } );
+	B.cyl( 'hard', 0, 1.45, 0, 0.05, 0.06, 0.14, { segs: 8, ...iron } );
+	for ( let k = 0; k < 4; k ++ ) B.box( 'hard', 0, 1.17 + k * 0.05, 0.175, 0.24, 0.035, 0.012, { tint: P.black, data: IRON( 0.47 + k * 0.01, 0.4 ) } );
+	B.pop();
+	TOWER.signal = new Vector3( Math.cos( la ) * ( lr + 0.17 ), deck + 1.27, Math.sin( la ) * ( lr + 0.17 ) );
+	TOWER.signalStand = new Vector3( Math.cos( la ) * 3.05, deck, Math.sin( la ) * 3.05 );
+
+}
+
 function tower( ctx, parts ) {
 
 	const { B, rand, lights, colliders } = ctx;
@@ -1036,6 +1081,7 @@ function tower( ctx, parts ) {
 	// clockwork in the pedestal, the burner's chimney up to the ventilator
 	lensPedestal( ctx, parts, deck, gm );
 	B.rod( 'hard', [ 0, gm + 0.75, 0 ], [ 0, g1 + 1.2, 0 ], 0.05, 0.05, { segs: 8, ...iron } );
+	lanternFittings( ctx, parts, deck, top );
 
 	// walls to stand inside or outside of, the floor, the door
 	colliders.addRing( 0, 0, 2.2, 2.4, deck - 0.05, g1, { gaps: [ [ ga - gw, ga + gw ] ], tag: 'lantern' } );
@@ -1230,6 +1276,7 @@ function landing( ctx, name, L ) {
 		ropeCoil( B, 1.25, 0, 0.1, 0.07, 0.3, 4, rand.next() );
 		B.pop();
 		colliders.addBox( B.toWorld( x, gy + 0.4, z ), new Vector3( 0.8, 0.4, 0.45 ), ry + 0.06, { tag: 'ropeBox' } );
+		if ( ctx.marks ) ctx.marks.ropeBox = B.toWorld( x, gy + 0.6, z );
 
 	}
 
@@ -1421,7 +1468,8 @@ export function buildStation( ctx, village ) {
 
 	// ---- the buildings (and their moving parts: the lens, the doors and gate, the lantern's glass, built
 	// apart and assembled by assembleStation)
-	const parts = { doors: [], glass: new Builder(), lens: null, crank: null };
+	const parts = { doors: [], glass: new Builder(), lens: null, crank: null, telescope: null, marks: {} };
+	ctx.marks = parts.marks;
 	const light = tower( ctx, parts );
 	const lit = keepersHouse( ctx, village, parts );
 	oilStore( ctx, village );
@@ -1435,6 +1483,7 @@ export function buildStation( ctx, village ) {
 	tramway( ctx, [ ...westTrack, ...inSouth.slice( 1 ) ] );
 	flagstaff( ctx, STATION.flagstaff.x, STATION.flagstaff.z );
 	chapel( ctx, village, ch.x, ch.z, chY );
+	parts.marks.chapel = new Vector3( ch.x - 2.1, chY + 0.9, ch.z + 0.25 );
 
 	// a few of the lit windows light the yard at night (those facing it first)
 	lit.sort( ( a, b ) => b.dir.z - a.dir.z );
@@ -1442,5 +1491,116 @@ export function buildStation( ctx, village ) {
 
 	village.station = { focal: light.focal, landings: { east: E, west: W }, tracks: { east: eastTrack, west: westTrack }, parts, room: ROOM, tower: TOWER };
 	return village.station;
+
+}
+
+// ------------------------------------------------------------------ the moving parts
+
+// The station's moving parts as meshes, after the village is assembled (its materials and texture bake):
+// the lantern's glass (blended), the lens (turning: src/station/Lamp.js), the machine's crank, the doors
+// and the gate (each a group turned about its hinge; door.open 0..1). Returns { lens, crank, doors, glass,
+// lensMaterial }; village.station.moving holds it.
+export function assembleStation( village ) {
+
+	const S = village.station, parts = S.parts, mats = village.materials;
+	const bake = () => village.textures.bake();
+	const meshes = ( Bd, origin = null ) => {
+
+		const out = [];
+		const glass = Bd.batches.glass;
+		if ( glass ) {
+
+			delete Bd.batches.glass;
+			Bd.batch( 'wood' ).append( glass, ( d ) => [ d[ 0 ], d[ 1 ], 9, d[ 2 ] ] );
+
+		}
+
+		for ( const key of [ 'wood', 'hard', 'stone' ] ) {
+
+			const b = Bd.batches[ key ];
+			if ( ! b || b.vcount === 0 ) continue;
+			const geo = b.build();
+			if ( origin ) geo.translate( - origin.x, - origin.y, - origin.z );
+			geo.computeBoundingSphere();
+			const mesh = new Mesh( geo, mats[ key ] );
+			mesh.name = 'station_part_' + key;
+			mesh.castShadow = true;
+			mesh.receiveShadow = true;
+			mesh.onBeforeRender = bake;
+			out.push( mesh );
+
+		}
+
+		return out;
+
+	};
+
+	const group = new Group();
+	group.name = 'station_parts';
+
+	// the lantern's glazing
+	const glassMaterial = createLanternGlass();
+	const glass = new Mesh( parts.glass.batches.glass.build(), glassMaterial );
+	glass.name = 'station-glass';
+	glass.castShadow = false;
+	group.add( glass );
+
+	// the lens: brass frame (village hard) and the glass drum (the lens material), turning together
+	const lensMaterial = createLensMaterial();
+	const lens = new Group();
+	lens.name = 'station_lens';
+	lens.position.copy( parts.lens.position );
+	for ( const m of meshes( parts.lens.B ) ) lens.add( m );
+	const drum = new Mesh( parts.lens.glass.batches.lens.build(), lensMaterial );
+	drum.name = 'station_lens_glass';
+	drum.castShadow = false;
+	lens.add( drum );
+	group.add( lens );
+
+	// the machine's crank: turns about the winding square (its local z, out of the cabinet)
+	const crankBase = new Group();
+	crankBase.position.copy( parts.crank.position );
+	crankBase.rotation.y = parts.crank.ry;
+	const crank = new Group();
+	for ( const m of meshes( parts.crank.B ) ) crank.add( m );
+	crankBase.add( crank );
+	group.add( crankBase );
+
+	// the telescope on the lantern's sill
+	const telescope = new Group();
+	telescope.position.copy( parts.telescope.position );
+	telescope.rotation.y = parts.telescope.ry;
+	for ( const m of meshes( parts.telescope.B ) ) telescope.add( m );
+	group.add( telescope );
+
+	// doors and the gate
+	const doors = parts.doors.map( ( d ) => {
+
+		const g = new Group();
+		g.name = 'station_door_' + d.name;
+		g.position.copy( d.hinge );
+		g.rotation.y = d.ry;
+		for ( const m of meshes( d.B ) ) g.add( m );
+		d.B = null;
+		d.obj = g;
+		group.add( g );
+		return d;
+
+	} );
+
+	village.group.add( group );
+	S.moving = { group, lens, crank, doors, glass, lensMaterial, telescope };
+	return S.moving;
+
+}
+
+// a door's swing toward its target (open 0..1), its collider shut while it is mostly closed
+export function updateDoor( d, dt ) {
+
+	const k = 1 - Math.exp( - dt * 3.5 );
+	d.open += ( d.target - d.open ) * k;
+	if ( Math.abs( d.target - d.open ) < 1e-3 ) d.open = d.target;
+	if ( d.obj ) d.obj.rotation.y = d.ry + d.open * d.swing;
+	d.block.solid = d.open < 0.35;
 
 }

@@ -129,9 +129,12 @@ export class SoundScape {
 	// Does not touch Web Audio: the context is created on the first resume() (autoplay policy).
 	// shore (optional): { shore: ShoreWaves, field: shore field { res, data }, terrain: TerrainData }; found
 	// on window.__app when not given (see attachShore()).
-	constructor( { baseUrl = ( ( import.meta.env && import.meta.env.BASE_URL ) || '/' ) + 'audio/', shore = null } = {} ) {
+	// flannan: the Flannan Isles in winter (no palms, crickets, songbirds, terns or beach surf; the sea all
+	// round below the cliffs; src/audio/StationSound.js adds the station's own sounds)
+	constructor( { baseUrl = ( ( import.meta.env && import.meta.env.BASE_URL ) || '/' ) + 'audio/', shore = null, flannan = false } = {} ) {
 
 		this.baseUrl = baseUrl;
+		this.flannan = flannan;
 		this.ctx = null;
 		this._failed = false;
 		this._muted = false;
@@ -158,7 +161,7 @@ export class SoundScape {
 		this._warned = new Set();
 		this.env = {
 			lx: 0, ly: 1.7, lz: 0, fx: 0, fy: 0, fz: - 1, ux: 0, uy: 1, uz: 0,
-			u: 0, depth: 0, surf: 0.5, shoreDist: 60, onLand: true, wind: 7, day: 1, nearPier: false, hour: null,
+			u: 0, depth: 0, surf: 0.5, shoreDist: 60, onLand: true, wind: 7, day: 1, nearPier: false, hour: null, indoor: 0,
 			shoreX: 0, shoreZ: 1,
 			boat: { active: false, rpm: 0, speed: 0, x: 0, y: 0, z: 0, inside: false },
 		};
@@ -271,10 +274,14 @@ export class SoundScape {
 			const now = this.ctx.currentTime;
 			this._placeListener();
 			this._mix( now, step );
-			this._surf( step );
+			if ( ! this.flannan ) this._surf( step );
 			this._life( step );
-			this._birds( now, step );
-			this._whale( now, step );
+			if ( ! this.flannan ) {
+
+				this._birds( now, step );
+				this._whale( now, step );
+
+			}
 			this._reel( now );
 
 		} catch ( e ) {
@@ -513,7 +520,8 @@ export class SoundScape {
 		this.above = gain( 1, muffle1 );
 		this.under = gain( 0, this.master );
 		this.near = gain( 1, this.master );
-		this.foot = gain( 1, this.above );
+		// (at the Flannans after the muffle: indoors the world outside is muffled, your own steps are not)
+		this.foot = gain( 1, this.flannan ? this.aboveOut : this.above );
 
 		// distant surf: from the shore direction
 		this.surfPan = panner( this.above, 1, 0 );
@@ -970,7 +978,8 @@ export class SoundScape {
 		e.shoreDist = Math.max( 0, num( s.distanceToShore, 60 ) );
 		e.wind = clamp( num( s.windSpeed, 7 ), 0, 40 );
 		e.day = clamp( num( s.daylight, 1 ), 0, 1 );
-		e.nearPier = !! s.nearPier;
+		e.nearPier = !! s.nearPier && ! this.flannan;
+		e.indoor = clamp( num( s.indoor, 0 ), 0, 1 );
 		e.hour = typeof s.timeOfDay === 'number' && Number.isFinite( s.timeOfDay ) ? ( ( s.timeOfDay % 24 ) + 24 ) % 24 : null;
 		const b = s.boat || EMPTY, bp = b.position || EMPTY, eb = e.boat;
 		eb.active = !! b.active;
@@ -1013,7 +1022,13 @@ export class SoundScape {
 
 		}
 
-		this._pos( this.surfPan, e.lx + e.shoreX * 40, e.ly - 1.5, e.lz + e.shoreZ * 40 );
+		if ( this.flannan ) {
+
+			// the sea: out from the middle of Eilean Mòr past the listener, at the foot of the cliffs
+			const ox = e.lx + 155, oz = e.lz - 59, ol = Math.hypot( ox, oz ) || 1;
+			this._pos( this.surfPan, e.lx + ox / ol * 110, 2, e.lz + oz / ol * 110 );
+
+		} else this._pos( this.surfPan, e.lx + e.shoreX * 40, e.ly - 1.5, e.lz + e.shoreZ * 40 );
 		this._pos( this.boatPan, e.boat.x, e.boat.y + 0.3, e.boat.z );
 		this._ramp( this.boatIn.gain, e.boat.inside ? 1 : 0, 0.1 );
 		this._ramp( this.boatOut.gain, e.boat.inside ? 0 : 1, 0.1 );
@@ -1028,7 +1043,8 @@ export class SoundScape {
 		const deep = clamp( e.depth / 12, 0, 1 );
 
 		// underwater: steep low-pass on everything above the surface, the reef bed faded in
-		const f = Math.exp( lerp( Math.log( 20000 ), Math.log( lerp( 520, 260, deep ) ), u ) );
+		// indoors (the tower, the keepers' room): the wind and the sea through stone walls
+		const f = Math.min( Math.exp( lerp( Math.log( 20000 ), Math.log( lerp( 520, 260, deep ) ), u ) ), Math.exp( lerp( Math.log( 20000 ), Math.log( 700 ), e.indoor ) ) );
 		this._ramp( this.muffle[ 0 ].frequency, f, 0.04 );
 		this._ramp( this.muffle[ 1 ].frequency, Math.min( 20000, f * 1.4 ), 0.04 );
 		this._ramp( this.aboveOut.gain, lerp( 1, 0.4 / ( 1 + e.depth / 5 ), u ), 0.05 );
@@ -1045,7 +1061,9 @@ export class SoundScape {
 
 		// distant surf (the waves themselves are events, see _surf)
 		const lvl = 0.6 + 0.7 * e.surf;
-		this._bed( 'surf_far', dB( MIX.surfFar ) * 1.25 / ( 1 + d / 200 ) * lvl / dB( BANK.surf_far.lufs ), now, 0.5 );
+		// (the Flannans: the sea is all round, 80 m below the cliffs)
+		const dSea = this.flannan ? 110 : d;
+		this._bed( 'surf_far', dB( MIX.surfFar ) * ( this.flannan ? 1.8 : 1.25 ) / ( 1 + dSea / 200 ) * lvl / dB( BANK.surf_far.lufs ), now, 0.5 );
 
 		// wind in gusts: a random target every 2-8 s (lulls near silent), eased towards
 		const g = this._gust;
@@ -1060,13 +1078,15 @@ export class SoundScape {
 		g.v += ( g.target - g.v ) * ( 1 - Math.exp( - dt / 1.4 ) );
 		const w = Math.hypot( e.wind, eb.active ? eb.speed * 0.9 : 0 );
 		const gw = eb.active && eb.speed > 3 ? Math.max( g.v, 0.5 ) : g.v; // apparent wind on a running boat is steady
-		this._bed( 'wind', dB( MIX.wind ) * clamp( w / 7, 0, 2.5 ) * gw / dB( BANK.wind.lufs ), now, 0.3 );
+		// (the Flannans: exposed, more so up the tower; a whisper indoors)
+		const exposure = this.flannan ? ( 1.3 + clamp( ( e.ly - 85 ) / 15, 0, 1 ) ) * lerp( 1, 0.3, e.indoor ) : 1;
+		this._bed( 'wind', dB( MIX.wind ) * clamp( w / 7, 0, 2.5 ) * gw * exposure / dB( BANK.wind.lufs ), now, 0.3 );
 		this._ramp( this.windLP.frequency, 400 + ( 80 + 60 * gw ) * w, 0.4 );
 
 		// trees inland rustle in the gusts; crickets inland at night (daylight < 0.3)
-		const veg = e.onLand ? smooth( 6, 30, d ) : 0;
+		const veg = e.onLand && ! this.flannan ? smooth( 6, 30, d ) : 0;
 		this._bed( 'palms', dB( MIX.palms ) * veg * clamp( e.wind / 7, 0.2, 1.8 ) * g.v * ( 0.3 + 0.7 * e.day ) / dB( BANK.palms.lufs ), now, 0.5 );
-		const night = smooth( 0.3, 0.12, e.day );
+		const night = this.flannan ? 0 : smooth( 0.3, 0.12, e.day );
 		this._bed( 'crickets', dB( MIX.crickets ) * night * ( e.onLand ? 0.35 + 0.65 * smooth( 5, 40, d ) : 0.1 ) / dB( BANK.crickets.lufs ), now, 1 );
 
 		// water lapping the pier piles
