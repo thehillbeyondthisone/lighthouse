@@ -4,7 +4,7 @@
 *Firewatch*, set on Eilean Mòr in the Flannan Isles, Outer Hebrides, in the winter of 1900–01. It is built
 on the Tidewater WebGPU engine that this repository started as.
 
-**Status:** planning. No game code has changed yet. This is a living document: update it as decisions
+**Status:** a playable demo of the first night (see §8 and `HISTORY.md`). This is a living document: update it as decisions
 land, and record what changed in [`HISTORY.md`](../HISTORY.md).
 
 | | |
@@ -748,7 +748,19 @@ can run in parallel from Phase 2 onward.
   - winter turf instead of the tropical ground;
   - no vegetation, fishing game or boat.
 
-### The next five tasks
+- The playable demo (1 October): one night, Phases 3 and 4 in a first cut. See `HISTORY.md`.
+  - interaction (look-at, press and hold), a game clock with skips, scripted weather, save;
+  - the tower inside, the keepers' room, the lantern and the walkway;
+  - the lamp and its clockwork, the beams in the haze, the lens;
+  - the Watcher: the telescope, her lamp, Morse, the code book;
+  - the eerie beats of the haar, the journal at dawn;
+  - the Flannan soundscape;
+  - Seven Hunters is the default page.
+
+### The next five tasks (after the demo)
+
+0. Play the demo on a real GPU: frame time, the first load, the page flow and the sound. Fix what that shows.
+
 
 1. The Flannan ground and coast:
    - cliff surf instead of the bay's breakers (`CliffSurge`, §5.4);

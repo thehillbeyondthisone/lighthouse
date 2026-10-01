@@ -816,6 +816,21 @@ body {
 	color: #0a1a22;
 }
 
+.tw-prompt-fill {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: rgba(var(--tw-aqua-rgb), 0.55);
+	transform: scaleY(0);
+	transform-origin: bottom;
+	pointer-events: none;
+	display: none;
+}
+
+.tw-prompt.is-hold .tw-prompt-fill {
+	display: block;
+}
+
 .tw-prompt-key::after {
 	content: '';
 	position: absolute;

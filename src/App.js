@@ -23,7 +23,9 @@ import { Environment } from './sky/Environment.js';
 import { TerrainData } from './world/TerrainData.js';
 import { loadFlannanData } from './world/flannan/FlannanData.js';
 import { FlannanTerrainData } from './world/flannan/FlannanTerrain.js';
-import { buildStation, STATION } from './world/flannan/Station.js';
+import { buildStation, assembleStation, STATION, TOWER, ROOM } from './world/flannan/Station.js';
+import { Lamp } from './station/Lamp.js';
+import { Beams } from './station/Beams.js';
 import { FarShore, CURVATURE } from './world/flannan/FarShore.js';
 import { TerrainGPU } from './world/TerrainGPU.js';
 import { Terrain } from './world/Terrain.js';
@@ -70,6 +72,7 @@ import { BoatSpray } from './player/BoatSpray.js';
 import { WakeSim } from './ocean/WakeSim.js';
 import { Vegetation } from './world/Vegetation.js';
 import { SoundScape } from './audio/SoundScape.js';
+import { StationSound } from './audio/StationSound.js';
 import { updateCameraVelocity, useStaticVelocity } from './post/CameraVelocity.js';
 
 const _up = new Vector3( 0, 1, 0 );
@@ -92,7 +95,8 @@ export class App {
 		if ( this.qs.has( 'serialPipelines' ) ) GPU.serialPipelines = true;
 		// where and when (src/sky/Setting.js): ?setting=flannan puts the sky over the Flannan Isles on
 		// 15 December 1900 (a real sun and moon); the default is Tidewater's tropical sky
-		this.setting = new Setting( this.qs.get( 'setting' ) || 'tidewater' );
+		// (the demo, Seven Hunters, is the default; ?setting=tidewater for the fishing game)
+		this.setting = new Setting( this.qs.get( 'setting' ) || 'flannan' );
 		if ( this.setting.date ) this.settings.timeOfDay = 12.4; // a winter noon: the sun at 8°
 		this.moonLight = 1; // moonlight relative to a full moon overhead (updateSun)
 
@@ -166,6 +170,8 @@ export class App {
 		// data is derived (shore field, GPU textures, meshes). The station grades its yard and tracks.
 		await progress( 0.12, this.flannan ? 'Building the light station…' : 'Building the village…' );
 		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, build: this.flannan ? buildStation : null } );
+		// the lens, the doors and gate, the lantern's glass (they move: meshes of their own)
+		if ( this.flannan ) assembleStation( this.village );
 		if ( ! qs.has( 'noVeg' ) && ! this.flannan ) {
 
 			await progress( 0.14, 'Planting the island…' );
@@ -199,7 +205,8 @@ export class App {
 		// systems the Flannan Isles won't have (docs/PLAN.md §5.1) can be left out: ?noReef, ?noWhale,
 		// ?noWildlife, ?noSnow, or ?lite for all of them and ?noCaustics (fewer pipelines: software
 		// rendering, tools/shots)
-		const off = ( k ) => qs.has( k ) || qs.has( 'lite' );
+		const FLANNAN_OFF = [ 'noReef', 'noWhale', 'noWildlife', 'noSnow', 'noCaustics' ];
+		const off = ( k ) => qs.has( k ) || qs.has( 'lite' ) || ( !! this.flannan && FLANNAN_OFF.includes( k ) );
 		await progress( 0.23, 'Growing the reef…' );
 		this.reef = off( 'noReef' ) ? null : new Reef( { scene, terrain: this.terrainData, shoreField: this.shoreField } );
 
@@ -277,9 +284,14 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		underwaterMode( this.boat.group, 'lite' );
 		if ( this.vegetation ) underwaterMode( this.vegetation.group, 'none' );
 
+		// (the station's tower and keepers' room are dark inside: their ambient light is cut)
+		const interiors = this.flannan ? [
+			[ { cyl: [ 0, 0, TOWER.rIn + 0.3, TOWER.floor - 0.5, TOWER.deck - 0.05 ] }, 0.22 ],
+			[ { box: [ ROOM.x0 - 0.3, TOWER.floor - 0.5, ROOM.z0 - 0.3, ROOM.x1 + 0.3, ROOM.ceiling + 0.3, ROOM.z1 + 0.3 ] }, 0.12 ],
+		] : [];
 		this.underwaterLighting = installUnderwaterLighting( {
 			fft: this.fft, caustics: this.caustics, clouds: this.clouds, terrain: this.terrainGPU,
-			shore: this.shore, surface: this.surface, shoreSim: this.shoreSim,
+			shore: this.shore, surface: this.surface, shoreSim: this.shoreSim, interiors,
 		} );
 
 		// sunlight bounced off the ground (one diffuse bounce, re-baked with the terrain sun shadow)
@@ -294,6 +306,54 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.localLights = new LocalLights();
 		addVillageLights( this.localLights, this.village );
 		addBoatLights( this.localLights, this.boat );
+		if ( this.flannan ) {
+
+			// the lamp in the lens (src/station/Lamp.js scales it with the flame), the signal lamp on the
+			// walkway (the story flashes it)
+			const src = this.localLights.sources.find( ( l ) => l.kind === 'lantern' && l.position.y > STATION.focal - 2 );
+			if ( src ) {
+
+				src.range = 6;
+				src.flicker = 0.03;
+				src.scale = 0;
+
+			}
+
+			this.lamp = new Lamp( { lens: this.village.station.moving.lens, lensMaterial: this.village.station.moving.lensMaterial, light: src, origin: new Vector3( 0, this.village.station.focal, 0 ) } );
+			const sp = TOWER.signal, sd = new Vector3( sp.x, 0, sp.z ).normalize();
+			this.signalLight = this.localLights.add( { position: sp.clone().addScaledVector( sd, 0.15 ), dir: sd, cosInner: 0.9, cosOuter: 0.5, color: new Color( 1, 0.82, 0.55 ), intensity: 9, range: 9, kind: 'signal', scale: 0 } );
+			this.curvature = CURVATURE;
+			// daylight through the tower's four small windows and the keepers' room's two (by day only)
+			for ( const [ deg, h ] of [ [ 90, 6.4 ], [ 0, 9.4 ], [ - 90, 12.4 ], [ 180, 14.9 ] ] ) {
+
+				const a = deg * Math.PI / 180, n = new Vector3( - Math.cos( a ), - 0.25, - Math.sin( a ) ).normalize();
+				this.localLights.add( { position: new Vector3( Math.cos( a ) * ( TOWER.rIn - 0.15 ), STATION.yard + h + 0.3, Math.sin( a ) * ( TOWER.rIn - 0.15 ) ), dir: n, cosInner: 0.3, cosOuter: - 0.4, color: new Color( 0.82, 0.88, 1.0 ), intensity: 2.2, range: 7, kind: 'daylight', day: true } );
+
+			}
+
+			for ( const [ x, z, nz ] of [ [ - 6.5, ROOM.z0 + 0.25, 1 ], [ - 7.6, ROOM.z1 - 0.25, - 1 ] ] ) {
+
+				this.localLights.add( { position: new Vector3( x, TOWER.floor + 1.6, z ), dir: new Vector3( 0, - 0.3, nz ).normalize(), cosInner: 0.2, cosOuter: - 0.5, color: new Color( 0.85, 0.9, 1.0 ), intensity: 1.6, range: 7, kind: 'daylight', day: true } );
+
+			}
+			// a 1900 keeper's hand lamp, not a torch: warmer, wider, dimmer
+			const fl = this.localLights.flashlight;
+			fl.color.setRGB( 1.0, 0.62, 0.32 );
+			fl.intensity = 22;
+			fl.range = 14;
+			fl.cosInner = Math.cos( MathUtils.degToRad( 30 ) );
+			fl.cosOuter = Math.cos( MathUtils.degToRad( 75 ) );
+			// ?lamp: lit and turning (the review shots)
+			if ( this.qs.has( 'lamp' ) ) {
+
+				this.lamp.lit = true;
+				this.lamp.glow = 1;
+				this.lamp.addWind( 1 );
+				this.lamp.speed = 1;
+
+			}
+
+		}
 		// rough, large or heavily overdrawn surfaces (ground, rocks, debris, foliage) take the local
 		// lights as Lambert only; the village, pier and boat get the full BRDF (glints on wet wood, metal)
 		for ( const root of [ this.terrain.mesh, this.rocks.group, this.debris && this.debris.group, this.vegetation && this.vegetation.group ] ) if ( root ) root.traverse( ( o ) => {
@@ -319,7 +379,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// painted over by the water).
 		this.scene.traverse( ( o ) => {
 
-			if ( o.isMesh && ( o.name === 'village_fabric' || o.name === 'village_nets' || o.name === 'boat-trap' || o.name === 'boat-glass' ) ) o.layers.set( LAYERS.TRANSPARENT );
+			if ( o.isMesh && ( o.name === 'village_fabric' || o.name === 'village_nets' || o.name === 'boat-trap' || o.name === 'boat-glass' || o.name === 'station-glass' ) ) o.layers.set( LAYERS.TRANSPARENT );
 
 		} );
 		// Terrain and water place their vertices in the vertex shader (CDLOD), so three's default motion
@@ -399,7 +459,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// aerial perspective, marine haze and volumetric sun shafts (post)
 		this.haze = qs.has( 'noHaze' ) ? null : new AirHaze( {
 			depthTexture: this.sceneRenderer.sceneRT.depthTexture, underwater: this.underwater, atmosphere: this.atmosphere,
-			sky: this.sky, clouds: this.clouds, terrain: this.terrainGPU, csm: this.csm,
+			sky: this.sky, clouds: this.clouds, terrain: this.terrainGPU, csm: this.csm, beams: this.flannan ? Beams : null,
 		} );
 		this.post = new PostFX( renderer, { sceneRenderer: this.sceneRenderer, camera, underwater: this.underwater, clouds: this.clouds, sunDir: this.atmosphere.sunDir, haze: this.haze } );
 		// visibility at sea level (km): ?vis=, or 30 km at the Flannans (Lewis shows on clearer days only);
@@ -415,7 +475,9 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		// ---------------------------------------------------------------- audio
 		// recorded field recordings (public/audio, credits in public/audio/CREDITS.md); ?noAudio turns it off
-		this.audio = qs.has( 'noAudio' ) ? null : new SoundScape();
+		this.audio = qs.has( 'noAudio' ) ? null : new SoundScape( { flannan: !! this.flannan } );
+		// the station's machinery, doors and the sea in the geos
+		this.stationSound = this.audio && this.flannan ? new StationSound( this.audio, { tower: TOWER } ) : null;
 		this.player.audio = this.audio;
 		// the fishing game (rod, bites, catch, cooler, fish stand)
 		this.game = this.flannan ? null : new Game( this );
@@ -714,7 +776,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		if ( this.input.hit( 'KeyL' ) ) {
 
 			const on = this.localLights.toggleFlashlight();
-			if ( this.ui ) this.ui.ui.toast( on ? 'Flashlight on' : 'Flashlight off' );
+			if ( this.ui ) this.ui.ui.toast( this.flannan ? ( on ? 'Hand lamp lit' : 'Hand lamp out' ) : ( on ? 'Flashlight on' : 'Flashlight off' ) );
 
 		}
 
@@ -730,6 +792,11 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		if ( this.freeCam ) this.fly.update( dt );
 		else this.player.update( dt );
 		if ( this.game ) this.game.update( dt );
+		// the first night (src/story/Story.js) keeps the clock, the weather and the lamp; without it (the
+		// review shots) the lamp just burns
+		if ( this.story ) this.story.update( dt );
+		else if ( this.lamp ) this.lamp.update( dt, 0 );
+		if ( this.flannan ) Beams.uniforms.pixel.value = MathUtils.degToRad( this.camera.fov ) / Math.max( 1, this.sceneRenderer.height );
 		this.updateSun();
 		// the world drops away below the camera with the Earth's curvature (FarShore.js)
 		if ( this.flannan ) FrameUniforms.fields.curvature.value.set( CURVATURE, this.camera.position.x, this.camera.position.z, 0 );
@@ -829,7 +896,26 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		f.up.set( 0, 1, 0 ).applyQuaternion( cam.quaternion );
 		const h = this.cameraWaterHeight ?? 0;
 		const coast = this.terrainData.coastDistance( p.x, p.z ).d;
+		// the station: indoors (the tower's shaft, the keepers' room), in the lantern, on the walkway
+		let indoor = 0, inLantern = false, onWalkway = false;
+		if ( this.flannan ) {
+
+			const r = Math.hypot( p.x, p.z ), T = TOWER;
+			if ( r < T.rIn && p.y < T.deck - 0.1 ) indoor = 1;
+			if ( p.x > ROOM.x0 && p.x < ROOM.x1 && p.z > ROOM.z0 && p.z < ROOM.z1 && p.y < ROOM.ceiling ) indoor = 1;
+			inLantern = r < 2.2 && p.y > T.deck - 0.3 && p.y < T.deck + 4.5;
+			onWalkway = r >= 2.2 && r < 3.9 && Math.abs( p.y - T.deck - 1.6 ) < 1.5;
+			// the hand lamp at full strength indoors, day or night
+			this.localLights.flashlight.boost = indoor;
+			if ( this.stationSound ) this.stationSound.update( dt, {
+				listener: p, lampGlow: this.lamp ? this.lamp.glow : 0, lensTurning: !! this.lamp && this.lamp.speed > 0.2,
+				indoor, inLantern, onWalkway, windGust: this.audio._gust ? this.audio._gust.v : 0.5, wind: G.windSpeed.value,
+			} );
+
+		}
+
 		this.audio.update( dt, {
+			indoor,
 			listener: { position: p, forward: f.fwd, up: f.up },
 			underwater: p.y < h ? 1 : 0,
 			depthBelowSurface: Math.max( 0, h - p.y ),

@@ -64,6 +64,20 @@ Virtual Reality, 2020.
 
 [Inter](https://rsms.me/inter/) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/) are both under the
 SIL Open Font License 1.1. They are loaded from Google Fonts at runtime and are not part of this repository.
+Seven Hunters' pages and cards use [IM Fell English](https://fonts.google.com/specimen/IM+Fell+English) (Igino
+Marini, SIL Open Font License 1.1), also from Google Fonts.
+
+## Seven Hunters
+
+- Eilean Mòr, the far shore and the seabed: the Copernicus GLO-30 DEM (© DLR e.V. 2010-2014 and © Airbus
+  Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA) and the AWS
+  Terrain Tiles (Mapzen terrarium, which credits SRTM, GMTED2010, ETOPO1 and others).
+- The station's machinery sounds (the escapement, the bell, the ratchet, the burner, doors, the shutter, the
+  wind in the glazing) are synthesised in `src/audio/StationSound.js`; the sea and the wind are the CC0
+  recordings above.
+- The history (the disappearance of December 1900, Superintendent Muirhead's report, the Gallan Head
+  observer, the fowlers' customs recorded by Martin Martin in 1703) follows the sources in
+  [`docs/PLAN.md`](docs/PLAN.md) §11. Walter Innes, Ceit Macleod and the Board's letter are fiction.
 
 ## Libraries
 

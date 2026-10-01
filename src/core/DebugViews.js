@@ -51,6 +51,18 @@ export const VIEWS = {
 	fWestLanding: { p: [ - 420, 16, 145 ], at: [ - 330, 22, 92 ], time: 12.4 }, // the west landing's geo
 	fAerial: { p: [ 230, 230, 320 ], at: [ - 80, 40, 10 ], time: 12.4 },
 	fDusk: { p: [ - 42, 73.4, 44 ], at: [ - 3, 88, 3 ], time: 15.3 },
+	// the demo's spaces (?lamp lights the lamp): the keepers' room, the tower's stair, the lantern, the
+	// beams over the yard in the haar, the east landing where the night begins
+	dRoom: { p: [ 0.4, 82.67, 4.6 ], at: [ - 6.5, 81.6, - 0.6 ], time: 14.2 },
+	dStair: { p: [ - 0.1, 87.0, - 1.25 ], at: [ 1.2, 87.9, 0.3 ], time: 14.2 },
+	dKeyart: { p: [ - 46, 76.5, 48 ], at: [ - 2, 92, 2 ], time: 15.55, vis: 60 },
+	dLantern: { p: [ 1.65, 99.83, - 0.5 ], at: [ 0, 100.9, 0 ], time: 16.4 },
+	dBeams: { p: [ - 14, 82.3, 16 ], at: [ 0, 104, - 3 ], time: 21.5, vis: 1.3 },
+	dBeamsClear: { p: [ - 14, 82.3, 16 ], at: [ 0, 104, - 3 ], time: 18.5, vis: 60 },
+	dWalkway: { p: [ 2.55, 99.83, 1.75 ], at: [ 32503, 60, 5435 ], time: 16.8, vis: 60 },
+	dLanding: { p: [ 128, 5.0, 51.5 ], at: [ 70, 50, 28 ], time: 13.7 },
+	dYardMoon: { p: [ 8, 82.3, 14 ], at: [ - 10, 83, 2 ], time: 19.0, vis: 60 },
+	dRoomNight: { p: [ 0.4, 82.67, 4.6 ], at: [ - 6.5, 81.6, - 0.6 ], time: 19.0 },
 };
 
 // a view's own visibility (km, `vis`) and field of view (degrees, `fov`), or the app's

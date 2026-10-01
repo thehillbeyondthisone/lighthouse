@@ -32,7 +32,10 @@ const MAP_EXTENTS = [ 128, 1024 ];
 // `uwMap` for the baked map lookup: uwMapLookup( xz, waves ) -> UwMapSample).
 // Note: unlike TSL, the modules' bindings (maps, caustics, terrain, clouds) are declared in every
 // material that includes the lighting hooks, whatever its mode (the code itself is #if'd away).
-export function installUnderwaterLighting( { fft, caustics, clouds = null, terrain = null, shore = null, surface = null, shoreSim = null } ) {
+// interiors: rooms the sky's ambient light hardly reaches (the light station's tower and keepers' room):
+// [ { box: [ x0, y0, z0, x1, y1, z1 ] } | { cyl: [ x, z, r, y0, y1 ] }, k ]: the ambient falls to k inside,
+// over the last 0.25 m inward of the volume (give it the walls' half thickness outside the room)
+export function installUnderwaterLighting( { fft, caustics, clouds = null, terrain = null, shore = null, surface = null, shoreSim = null, interiors = [] } ) {
 
 	const params = new UniformBlock( 'UnderwaterParams', {
 		// highest the water can reach on the shore: the swash run-up grows with the surf height. Terrain
@@ -270,12 +273,28 @@ fn hookDirectModulation( P: vec3f, N: vec3f ) -> vec3f {
 `,
 	} );
 
+	// the interiors' ambient factor, generated from the volumes (none: 1)
+	const num = ( v ) => ( Number.isInteger( v ) ? v.toFixed( 1 ) : String( v ) );
+	const inner = interiors.map( ( [ v, k ] ) => v.box
+		? `	a = min( a, mix( 1.0, ${ num( k ) }, interiorDepth( min( P - vec3f( ${ v.box.slice( 0, 3 ).map( num ).join( ', ' ) } ), vec3f( ${ v.box.slice( 3 ).map( num ).join( ', ' ) } ) - P ) ) ) );`
+		: `	a = min( a, mix( 1.0, ${ num( k ) }, interiorDepth( vec3f( ${ num( v.cyl[ 2 ] ) } - length( P.xz - vec2f( ${ num( v.cyl[ 0 ] ) }, ${ num( v.cyl[ 1 ] ) } ) ), P.y - ${ num( v.cyl[ 3 ] ) }, ${ num( v.cyl[ 4 ] ) } - P.y ) ) ) );` ).join( '\n' );
 	const ambient = new ShaderModule( {
 		name: 'hook-ambientModulation-underwater',
 		deps: [ direct ],
 		code: /* wgsl */`
+// how far inside a volume a point is (its distances to the faces, all positive inside), 0..1 over 0.25 m
+fn interiorDepth( d: vec3f ) -> f32 {
+	return smoothstep( 0.0, 0.25, min( min( d.x, d.y ), d.z ) );
+}
+
+fn interiorAmbient( P: vec3f ) -> f32 {
+	var a = 1.0;
+${ inner }
+	return a;
+}
+
 fn hookAmbientModulation( P: vec3f, N: vec3f ) -> vec3f {
-	var result = vec3f( 1.0 );
+	var result = vec3f( interiorAmbient( P ) );
 #if !IS_WATER
 #if UNDERWATER_LIGHTING != 0
 	if ( P.y < frame.seaLevel + uwReach() ) {
@@ -284,7 +303,7 @@ fn hookAmbientModulation( P: vec3f, N: vec3f ) -> vec3f {
 		let under = smoothstep( 0.0, 0.1, d );
 		// diffuse downwelling light: effective path ~1.2x depth, plus a little in-scattered blue
 		let atten = exp( - ( frame.waterAbsorption + frame.waterScattering ) * d * 1.2 ) * 0.85 + vec3f( 0.0, 0.02, 0.04 ) * exp( d * -0.1 );
-		result = mix( vec3f( 1.0 ), atten, under );
+		result *= mix( vec3f( 1.0 ), atten, under );
 	}
 #endif
 #endif

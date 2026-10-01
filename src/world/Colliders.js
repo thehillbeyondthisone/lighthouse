@@ -1,14 +1,68 @@
 import * as THREE from '../engine/index.js';
 
+// angle a within the range a0..a1 (radians, a1 > a0, either may be past +-PI)
+const angleIn = ( a, a0, a1 ) => {
+
+	const t = ( ( a - a0 ) % ( Math.PI * 2 ) + Math.PI * 2 ) % ( Math.PI * 2 );
+	return t <= a1 - a0;
+
+};
+
 // Lightweight collision world for the character controller and boat.
 // Boxes are oriented around Y only. Walkable boxes (decks, floors, stairs) act as ground.
+// Rings are round walls you stand inside or outside of (a tower, a lantern, a railing), with gaps for
+// doors. Surfaces are walkable height functions (a spiral stair, a round floor).
 export class Colliders {
 
 	constructor() {
 
 		this.boxes = [];
 		this.cylinders = [];
+		this.rings = [];
+		this.surfaces = [];
 		this._v = new THREE.Vector3();
+
+	}
+
+	// a round wall between radii rIn and rOut about ( x, z ), from yMin to yMax; gaps: [ [ a0, a1 ], ... ]
+	// angle ranges (radians, atan2( z, x ) about the centre) with no wall (doorways). `enabled` can be
+	// switched later (a door: close the gap with a second ring)
+	addRing( x, z, rIn, rOut, yMin, yMax, { gaps = [], tag = '' } = {} ) {
+
+		const r = { x, z, rIn, rOut, yMin, yMax, gaps, tag, enabled: true };
+		this.rings.push( r );
+		return r;
+
+	}
+
+	// a walkable surface: height( x, z, maxY ) -> the highest walkable height at ( x, z ) not above maxY,
+	// or -Infinity; inside ( x, z ) -> bool is a cheap bounds test. kind: the footstep surface
+	addSurface( height, { inside = () => true, kind = 'rock', tag = '' } = {} ) {
+
+		const s = { height, inside, kind, tag, enabled: true };
+		this.surfaces.push( s );
+		return s;
+
+	}
+
+	// the walkable surface under ( x, z ) that groundHeightAt would stand you on, if it is a surface
+	surfaceAt( x, z, maxY ) {
+
+		let best = - Infinity, kind = null;
+		for ( const s of this.surfaces ) {
+
+			if ( ! s.enabled || ! s.inside( x, z ) ) continue;
+			const h = s.height( x, z, maxY );
+			if ( h > best ) {
+
+				best = h;
+				kind = s.kind;
+
+			}
+
+		}
+
+		return kind && best > - Infinity && best >= this.groundHeightAt( x, z, maxY, 0, false ) ? kind : null;
 
 	}
 
@@ -48,8 +102,9 @@ export class Colliders {
 
 	}
 
-	// Highest walkable surface under (x, z) not higher than maxY.
-	groundHeightAt( x, z, maxY, pad = 0 ) {
+	// Highest walkable surface under (x, z) not higher than maxY (boxes, and the surfaces unless
+	// withSurfaces is false).
+	groundHeightAt( x, z, maxY, pad = 0, withSurfaces = true ) {
 
 		let best = - Infinity;
 		for ( const b of this.boxes ) {
@@ -58,6 +113,14 @@ export class Colliders {
 			if ( Math.abs( x - b.center.x ) > b.radius + pad + 0.01 || Math.abs( z - b.center.z ) > b.radius + pad + 0.01 ) continue;
 			const [ lx, lz ] = this._toLocal( b, x, z );
 			if ( Math.abs( lx ) <= b.half.x + pad && Math.abs( lz ) <= b.half.z + pad ) best = Math.max( best, b.top );
+
+		}
+
+		if ( withSurfaces ) for ( const s of this.surfaces ) {
+
+			if ( ! s.enabled || ! s.inside( x, z ) ) continue;
+			const h = s.height( x, z, maxY );
+			if ( h <= maxY && h > best ) best = h;
 
 		}
 
@@ -111,6 +174,44 @@ export class Colliders {
 			const d = Math.sqrt( d2 ) || 1e-4;
 			pos.x = c.x + dx / d * r;
 			pos.z = c.z + dz / d * r;
+			hit = true;
+
+		}
+
+		for ( const g of this.rings ) {
+
+			if ( ! g.enabled || pos.y + height < g.yMin || pos.y + stepHeight > g.yMax ) continue;
+			const dx = pos.x - g.x, dz = pos.z - g.z;
+			const d = Math.hypot( dx, dz ) || 1e-4;
+			if ( d + radius <= g.rIn || d - radius >= g.rOut ) continue;
+			const a = Math.atan2( dz, dx );
+			const gap = g.gaps.find( ( [ a0, a1 ] ) => angleIn( a, a0, a1 ) );
+			if ( gap ) {
+
+				// in a doorway: only its sides (radial segments at the gap's edges) can be hit
+				for ( const e of gap ) {
+
+					const ex = Math.cos( e ), ez = Math.sin( e );
+					const t = Math.min( g.rOut, Math.max( g.rIn, dx * ex + dz * ez ) );
+					const qx = dx - ex * t, qz = dz - ez * t, q = Math.hypot( qx, qz );
+					if ( q < radius && q > 1e-6 ) {
+
+						pos.x += qx / q * ( radius - q );
+						pos.z += qz / q * ( radius - q );
+						hit = true;
+
+					}
+
+				}
+
+				continue;
+
+			}
+
+			// inside the wall's middle: stay on the side the centre is on
+			const r = d < ( g.rIn + g.rOut ) / 2 ? g.rIn - radius : g.rOut + radius;
+			pos.x = g.x + dx / d * r;
+			pos.z = g.z + dz / d * r;
 			hit = true;
 
 		}

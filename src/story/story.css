@@ -1,0 +1,314 @@
+/* The story's screens (src/story/StoryUI.js): ink on paper, a period face. */
+
+.sh-root {
+	--sh-paper: #efe6d2;
+	--sh-paper-edge: #d9ccb0;
+	--sh-ink: #2a2620;
+	--sh-ink-soft: #5d5446;
+	--sh-rule: rgba(60, 50, 35, 0.22);
+	--sh-lamp: #ffcf86;
+	--sh-serif: 'IM Fell English', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	pointer-events: none;
+	font-family: var(--sh-serif);
+	color: var(--sh-ink);
+}
+
+.sh-root.is-modal .sh-layer {
+	pointer-events: auto;
+}
+
+.sh-layer {
+	position: absolute;
+	inset: 0;
+}
+
+/* ---- the objective and the clock, top left under the brand */
+.sh-objective {
+	position: absolute;
+	left: 22px;
+	top: 18px;
+	max-width: min(440px, 70vw);
+	color: #f3ead8;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 14px rgba(0, 0, 0, 0.5);
+	transition: opacity 0.6s ease;
+}
+
+.sh-objective.is-hidden { opacity: 0; }
+
+.sh-clock {
+	font-size: 15px;
+	letter-spacing: 0.06em;
+	opacity: 0.8;
+}
+
+.sh-goal {
+	margin-top: 4px;
+	font-size: 19px;
+	line-height: 1.3;
+	font-style: italic;
+}
+
+.sh-objective.is-new .sh-goal {
+	animation: sh-goal-in 2.4s ease;
+}
+
+@keyframes sh-goal-in {
+	0% { opacity: 0; transform: translateY(4px); }
+	15% { opacity: 1; transform: none; color: var(--sh-lamp); }
+	100% { opacity: 1; }
+}
+
+/* ---- full-screen cards */
+.sh-card, .sh-fade, .sh-end {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	background: #07080a;
+	color: #ece3cf;
+	opacity: 0;
+	transition: opacity 0.9s ease;
+	padding: 0 8vw;
+	text-align: center;
+}
+
+.sh-card.is-on, .sh-fade.is-on, .sh-end.is-on { opacity: 1; }
+
+.sh-card { cursor: pointer; }
+
+.sh-card-kicker {
+	font-size: 17px;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	opacity: 0.6;
+	margin-bottom: 14px;
+}
+
+.sh-card-title {
+	font-size: clamp(30px, 4.6vw, 54px);
+	margin-bottom: 26px;
+}
+
+.sh-card-line {
+	max-width: 640px;
+	font-size: clamp(18px, 1.9vw, 23px);
+	line-height: 1.55;
+	margin: 0 0 14px;
+	opacity: 0;
+	animation: sh-line-in 1.4s ease forwards;
+}
+
+.sh-card-line:nth-of-type(2) { animation-delay: 0.6s; }
+.sh-card-line:nth-of-type(3) { animation-delay: 1.4s; }
+.sh-card-line:nth-of-type(4) { animation-delay: 2.2s; }
+.sh-card-line:nth-of-type(5) { animation-delay: 3s; }
+
+@keyframes sh-line-in {
+	from { opacity: 0; transform: translateY(6px); }
+	to { opacity: 0.92; transform: none; }
+}
+
+.sh-card-more {
+	position: absolute;
+	bottom: 8vh;
+	font-size: 15px;
+	letter-spacing: 0.1em;
+	opacity: 0;
+	animation: sh-line-in 1s ease 2.4s forwards;
+}
+
+.sh-fade-text {
+	font-size: clamp(18px, 2vw, 24px);
+	font-style: italic;
+	opacity: 0.85;
+	max-width: 620px;
+	line-height: 1.5;
+}
+
+/* ---- paper pages */
+.sh-page-wrap {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(5, 6, 8, 0.45);
+	opacity: 0;
+	transition: opacity 0.35s ease;
+	padding: 16px;
+}
+
+.sh-page-wrap.is-on { opacity: 1; }
+
+.sh-page {
+	width: min(560px, 100%);
+	max-height: calc(100vh - 32px);
+	overflow-y: auto;
+	padding: 34px 40px 28px;
+	background:
+		radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.35), transparent 60%),
+		radial-gradient(ellipse at 80% 90%, rgba(120, 90, 40, 0.12), transparent 55%),
+		var(--sh-paper);
+	box-shadow: 0 0 0 1px var(--sh-paper-edge), 0 18px 50px rgba(0, 0, 0, 0.55);
+	border-radius: 2px;
+	transform: translateY(8px) rotate(-0.4deg);
+	transition: transform 0.4s ease;
+}
+
+.sh-page-wrap.is-on .sh-page { transform: rotate(-0.4deg); }
+
+.sh-page-title {
+	margin: 0 0 18px;
+	font-size: 24px;
+	font-weight: normal;
+	text-align: center;
+	border-bottom: 1px solid var(--sh-rule);
+	padding-bottom: 12px;
+}
+
+.sh-page-p {
+	font-size: 18px;
+	line-height: 1.5;
+	margin: 0 0 12px;
+}
+
+.sh-page-intro {
+	font-style: italic;
+	color: var(--sh-ink-soft);
+}
+
+.sh-btn {
+	display: inline-block;
+	margin: 14px 10px 0 0;
+	padding: 8px 18px;
+	font: inherit;
+	font-size: 17px;
+	color: var(--sh-paper);
+	background: var(--sh-ink);
+	border: none;
+	border-radius: 2px;
+	cursor: pointer;
+}
+
+.sh-btn:disabled { opacity: 0.35; cursor: default; }
+.sh-btn.is-quiet { background: transparent; color: var(--sh-ink-soft); text-decoration: underline; }
+.sh-end .sh-btn.is-quiet { color: #c9bfa9; }
+.sh-btn:focus-visible, .sh-option:focus-visible, .sh-chip:focus-visible { outline: 2px solid #8a6a2a; outline-offset: 2px; }
+
+.sh-options { display: flex; flex-direction: column; gap: 8px; }
+
+.sh-option {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	padding: 10px 14px;
+	font: inherit;
+	text-align: left;
+	color: var(--sh-ink);
+	background: rgba(255, 255, 255, 0.35);
+	border: 1px solid var(--sh-rule);
+	border-radius: 2px;
+	cursor: pointer;
+}
+
+.sh-option:hover { background: rgba(255, 255, 255, 0.65); }
+.sh-option-label { font-size: 18px; letter-spacing: 0.04em; }
+.sh-option-sub { font-size: 14px; font-style: italic; color: var(--sh-ink-soft); }
+
+.sh-field-label { margin: 14px 0 6px; font-size: 16px; font-style: italic; color: var(--sh-ink-soft); }
+.sh-field { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.sh-chip {
+	padding: 5px 11px;
+	font: inherit;
+	font-size: 15px;
+	color: var(--sh-ink);
+	background: rgba(255, 255, 255, 0.3);
+	border: 1px solid var(--sh-rule);
+	border-radius: 2px;
+	cursor: pointer;
+}
+
+.sh-chip.is-on { background: var(--sh-ink); color: var(--sh-paper); border-color: var(--sh-ink); }
+
+/* ---- the journal */
+.sh-page.is-journal { width: min(640px, 100%); }
+
+.sh-journal { border-top: 1px solid var(--sh-rule); }
+
+.sh-journal-row {
+	display: grid;
+	grid-template-columns: 62px 1fr;
+	gap: 12px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--sh-rule);
+	font-size: 17px;
+	line-height: 1.4;
+	text-align: left;
+}
+
+.sh-journal-t { color: var(--sh-ink-soft); font-variant-numeric: tabular-nums; }
+.sh-journal-footer { margin-top: 14px; text-align: right; font-style: italic; }
+
+/* ---- the end */
+.sh-end { flex-direction: row; gap: 5vw; flex-wrap: wrap; overflow-y: auto; padding: 4vh 6vw; }
+.sh-end .sh-page { color: var(--sh-ink); transform: rotate(-0.8deg); }
+.sh-end-side { max-width: 380px; text-align: left; }
+.sh-end-side .sh-card-line { animation: none; opacity: 0.9; }
+.sh-end-credits { font-size: 14px; line-height: 1.5; opacity: 0.6; margin: 18px 0 8px; }
+.sh-end .sh-btn { background: #ece3cf; color: #15130f; }
+.sh-end .sh-btn.is-quiet { background: transparent; color: #d8cfba; }
+
+/* ---- the Morse strip, bottom centre */
+.sh-strip {
+	position: absolute;
+	left: 50%;
+	bottom: 26vh;
+	transform: translate(-50%, 8px);
+	width: min(720px, calc(100vw - 32px));
+	padding: 12px 20px 14px;
+	background: rgba(10, 11, 12, 0.62);
+	color: #efe6d2;
+	border-top: 1px solid rgba(255, 207, 134, 0.35);
+	opacity: 0;
+	transition: opacity 0.4s ease, transform 0.4s ease;
+	text-align: center;
+}
+
+.sh-strip.is-on { opacity: 1; transform: translate(-50%, 0); }
+.sh-strip-from { font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.6; margin-bottom: 6px; }
+.sh-strip-text { font-size: 22px; letter-spacing: 0.08em; min-height: 1.3em; }
+.sh-strip-cursor { color: var(--sh-lamp); animation: sh-blink 0.8s steps(1) infinite; }
+.sh-strip-morse { margin-top: 6px; font-family: ui-monospace, monospace; font-size: 15px; line-height: 1.6; color: var(--sh-lamp); opacity: 0.75; letter-spacing: 0.12em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.sh-strip-hint { margin-top: 8px; font-size: 14px; font-style: italic; opacity: 0.6; }
+
+@keyframes sh-blink { 50% { opacity: 0; } }
+
+/* ---- the telescope: a round field, black outside */
+.sh-telescope {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	background: radial-gradient(circle at 50% 50%, transparent 0, transparent 30vmin, rgba(0, 0, 0, 0.6) 34vmin, #000 37vmin);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sh-card-line, .sh-card-more, .sh-objective.is-new .sh-goal { animation: none; opacity: 0.92; }
+}
+
+@media (max-width: 600px) {
+	.sh-page { padding: 24px 20px 20px; }
+	.sh-objective { left: 14px; top: 12px; }
+}
+
+/* ---- Seven Hunters over the shared HUD: no frame rate, brand or traversal mode at top left (the
+   objective sits there), no fishing guide in the help */
+.is-story .tw-tl,
+.is-story .tw-help-replay { display: none !important; }
+.is-story .tw-start-title { font-family: var(--sh-serif, 'IM Fell English', Georgia, serif); font-weight: normal; letter-spacing: 0.08em; }

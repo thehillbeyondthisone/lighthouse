@@ -1898,6 +1898,11 @@ export class UI {
 		// Opening the panel exits pointer lock so the cursor can reach it.
 		this.releasePointerOnPanel = true;
 
+		// Seven Hunters (the demo) unless ?setting=tidewater: the brand, the start screen, the help
+		this.tidewater = /[?&]setting=tidewater\b/.test( location.search );
+		this.brand = this.tidewater ? 'TIDEWATER' : 'SEVEN HUNTERS';
+		if ( ! this.tidewater ) document.documentElement.classList.add( 'is-story' );
+
 		// index.html ships a temporary FPS counter; the HUD replaces it.
 		document.getElementById( 'fps' )?.remove();
 
@@ -1938,7 +1943,7 @@ export class UI {
 		this.sparkEl = stats.querySelector( '.tw-spark' );
 
 		const brand = h( 'div', 'tw-brand' );
-		brand.innerHTML = `${ brandMark() }<span class="tw-brand-name">TIDEWATER</span>`;
+		brand.innerHTML = `${ brandMark() }<span class="tw-brand-name">${ this.brand }</span>`;
 		this.modeEl = h( 'div', 'tw-mode is-empty', { role: 'status' } );
 		this.modeIco = h( 'span', 'tw-mode-ico' );
 		this.modeText = h( 'span', 'tw-mode-text' );
@@ -1953,6 +1958,9 @@ export class UI {
 		this.promptEl = h( 'div', 'tw-prompt tw-glass', { 'aria-live': 'polite' } );
 		this.promptKey = h( 'kbd', 'tw-prompt-key' );
 		this.promptText = h( 'span', 'tw-prompt-text' );
+		// a hold-to-use prompt fills its key while the key is held
+		this.promptFill = h( 'span', 'tw-prompt-fill' );
+		this.promptKey.append( this.promptFill );
 		this.promptEl.append( this.promptKey, this.promptText );
 
 		// bottom-left: boat instruments
@@ -2141,12 +2149,13 @@ export class UI {
 						<h3>Move</h3>
 						${ row( wasd, 'Move' ) }
 						${ row( mouse, 'Look around<small>Click to capture</small>' ) }
-						${ row( k( 'Shift' ), 'Sprint, boat boost' ) }
-						${ row( k( 'Space' ), 'Jump, swim up' ) }
-						${ row( k( 'C' ), 'Crouch, dive' ) }
+						${ row( k( 'Shift' ), this.tidewater ? 'Sprint, boat boost' : 'Hurry' ) }
+						${ this.tidewater ? row( k( 'Space' ), 'Jump, swim up' ) + row( k( 'C' ), 'Crouch, dive' ) : row( k( 'Space' ), 'Jump' ) }
 					</section>
 					<section>
 						<h3>Interact</h3>
+						${ this.tidewater ? '' : row( k( 'E' ), 'Use<small>Hold to light the lamp, to wind the machine</small>' ) + row( k( 'RMB' ), 'Telescope<small>Hold, once you have it</small>' ) + row( k( 'L' ), 'Hand lamp' ) + row( k( 'Space' ), 'Read her signals faster' ) + row( k( 'F' ), 'Free camera' ) + row( k( 'M' ), 'Mute' ) }
+						${ ! this.tidewater ? '' : `
 						${ row( k( 'E' ), 'Interact<small>Board, helm, step ashore, trade</small>' ) }
 						${ row( k( 'V' ), 'Boat camera<small>1st / 3rd person</small>' ) }
 						${ row( k( 'R' ), 'Fishing rod<small>Take out / put away</small>' ) }
@@ -2156,7 +2165,7 @@ export class UI {
 						${ row( k( 'F' ), 'Free camera' ) }
 						${ row( k( 'T' ), 'Pause time' ) }
 						${ row( k( 'L' ), 'Flashlight' ) }
-						${ row( k( 'M' ), 'Mute' ) }
+						${ row( k( 'M' ), 'Mute' ) }`}
 					</section>
 					<section>
 						<h3>Interface</h3>
@@ -2167,7 +2176,7 @@ export class UI {
 					</section>
 				</div>
 				<div class="tw-help-guide">
-					<span><b>How to play:</b> catch fish, sell them to Joe at the fish stand by the pier, and buy upgrades from Marta at the chandlery by the boathouse. Both are on the map (lower right).</span>
+					<span>${ this.tidewater ? '<b>How to play:</b> catch fish, sell them to Joe at the fish stand by the pier, and buy upgrades from Marta at the chandlery by the boathouse. Both are on the map (lower right).' : '<b>The night:</b> light the lamp at sunset, keep the machine wound, answer Gallan Head when the air is clear, and write up the journal in the morning. <kbd>E</kbd> uses things (hold it to light and to wind), the right mouse button raises the telescope, <kbd>L</kbd> is your hand lamp, <kbd>Space</kbd> reads her signals faster.' }</span>
 					<button type="button" class="gm-btn is-ghost tw-help-replay">Replay the guide</button>
 				</div>
 			</div>`;
@@ -2188,8 +2197,8 @@ export class UI {
 		el.innerHTML = `
 			<div class="tw-start-inner">
 				${ brandMark( 'tw-start-mark' ) }
-				<div class="tw-start-title">TIDEWATER</div>
-				<button type="button" class="tw-start-cta"><span class="tw-start-pulse" aria-hidden="true"></span>${ icon( 'mouse' ) }<span>Click to explore</span></button>
+				<div class="tw-start-title">${ this.brand }</div>
+				<button type="button" class="tw-start-cta"><span class="tw-start-pulse" aria-hidden="true"></span>${ icon( 'mouse' ) }<span>${ this.tidewater ? 'Click to explore' : 'Click to begin' }</span></button>
 				<div class="tw-start-keys">
 					<span><span class="tw-wasd"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>Move</span>
 					<span><kbd class="tw-kbd-ico">${ icon( 'mouse' ) }</kbd>Look</span>
@@ -2716,10 +2725,20 @@ export class UI {
 
 	}
 
-	// setPrompt( 'E', 'Board boat' ) shows it; setPrompt( null ) hides it.
-	setPrompt( key, text ) {
+	// setPrompt( 'E', 'Board boat' ) shows it; setPrompt( null ) hides it. progress (0..1, or null): a
+	// hold-to-use prompt, filled that far
+	setPrompt( key, text, progress = null ) {
 
 		const on = key != null && key !== '';
+		const hold = progress !== null && progress !== undefined;
+		if ( hold !== !! this._pHold ) {
+
+			this._pHold = hold;
+			this.promptEl.classList.toggle( 'is-hold', hold );
+
+		}
+
+		if ( hold ) this.promptFill.style.transform = `scaleY(${ Math.min( 1, Math.max( 0, progress ) ).toFixed( 3 ) })`;
 		if ( on ) {
 
 			const k = String( key ), t = text == null ? '' : String( text );
@@ -2727,7 +2746,7 @@ export class UI {
 
 				this._pKey = k;
 				this._pText = t;
-				this.promptKey.textContent = k;
+				this.promptKey.firstChild && this.promptKey.firstChild.nodeType === 3 ? ( this.promptKey.firstChild.nodeValue = k ) : this.promptKey.prepend( k );
 				this.promptKey.classList.toggle( 'is-wide', k.length > 1 );
 				this.promptText.textContent = t;
 				this.promptEl.classList.remove( 'is-bump' );

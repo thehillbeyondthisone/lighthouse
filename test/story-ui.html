@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Story screens</title>
+	<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" />
+	<style>body { margin: 0; background: linear-gradient(180deg, #1b2334 0%, #39405a 55%, #11151d 56%, #06080b 100%); height: 100vh; }</style>
+</head>
+<body>
+<script type="module">
+// Dev page: Seven Hunters' screens (src/story/StoryUI.js) over a dusk backdrop, one per ?view=
+//   card | prologue | letter | codebook | form | strip | telescope | journal | end | hud
+import '../src/story/story.css';
+import { StoryUI } from '../src/story/StoryUI.js';
+import * as S from '../src/story/Script.js';
+import { morseText } from '../src/story/Watcher.js';
+
+const view = new URLSearchParams( location.search ).get( 'view' ) || 'card';
+const ui = new StoryUI();
+ui.setClock( '16.41 · Thursday 3rd January 1901' );
+ui.setObjective( S.GOALS.answer );
+const rows = [ [ '13.40', 'Landed at the east landing from the Hesperus.' ], [ '15.12', 'Lamp lit.' ], [ '15.13', 'Machine set going.' ], [ '18.00', 'Bar. 29.94. Wind: fresh breeze, SW. Sea: moderate. Visibility: very good: Lewis in sight.' ], [ '20.36', 'Haar came down from the west.' ], [ '03.00', 'Bar. 29.80. Wind SW, fresh. Haar. Sea rising at the west landing.' ], [ '08.54', 'Lamp extinguished. Machine stopped.' ] ];
+const node = S.WATCHER.nodes.ceit;
+if ( view === 'card' ) ui.card( [ S.DAY.place ], { kicker: S.TITLE, title: S.DAY.date } );
+if ( view === 'prologue' ) ui.card( S.PROLOGUE );
+if ( view === 'letter' ) ui.read( S.LETTER );
+if ( view === 'codebook' ) ui.choose( { title: 'The code book', intro: `Gallan Head: ${ node.her }`, options: node.options.map( ( o, i ) => ( { label: o.code ? `${ o.code } · ${ o.text }` : o.text, sub: o.code ? `The Board's code: about ${ o.minutes } minutes` : `Spelled out letter by letter: about ${ o.minutes } minutes`, value: i } ) ), cancel: 'Step away from the lamp' } );
+if ( view === 'form' ) ui.form( { title: 'The slate: 6 p.m.', intro: `The barometer reads ${ S.barometer( 18 ) } Chalk up the wind, the sea and the visibility.`, fields: [ { key: 'wind', label: 'Wind', options: S.OBS.wind }, { key: 'sea', label: 'Sea', options: S.OBS.sea }, { key: 'visibility', label: 'Visibility', options: S.OBS.visibility } ] } );
+if ( view === 'strip' || view === 'telescope' ) {
+
+	ui.strip( { from: 'Gallan Head', text: 'THIS IS CEIT MACLEOD. I WATCH YOUR LI', cursor: true, hint: 'Space: read on', morse: morseText( 'YOUR LI' ) } );
+	if ( view === 'telescope' ) ui.telescope( 1 );
+
+}
+
+if ( view === 'journal' ) ui.journal( { heading: 'Thursday 3rd to Friday 4th January 1901', rows, remarks: [ { key: 'islet', ask: S.REMARKS.islet.ask }, { key: 'gate', ask: S.REMARKS.gate.ask } ], footer: 'W. Innes, Assistant Keeper' } );
+if ( view === 'end' ) ui.end( { heading: 'Flannan Islands. Thursday 3rd January 1901', rows, lines: S.ENDING, credits: 'Seven Hunters, a demo.' } );
+</script>
+</body>
+</html>

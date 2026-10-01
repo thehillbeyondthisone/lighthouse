@@ -88,6 +88,8 @@ export class Player {
 		this._ashoreT = 0;
 		// set by the fishing game: while a line is out the helm / step ashore prompts give way
 		this.busy = false;
+		// mouse look sensitivity (a telescope slows it)
+		this.lookScale = 1;
 
 	}
 
@@ -154,8 +156,8 @@ export class Player {
 		}
 
 		const look = inp.consumeLook();
-		this.yaw -= look.x * 0.0022;
-		this.pitch = THREE.MathUtils.clamp( this.pitch - look.y * 0.0022, - 1.5, 1.5 );
+		this.yaw -= look.x * 0.0022 * this.lookScale;
+		this.pitch = THREE.MathUtils.clamp( this.pitch - look.y * 0.0022 * this.lookScale, - 1.5, 1.5 );
 
 		// (not with a line out or a fish in hand: E belongs to the fishing then)
 		if ( this.nearBoat() && ! this.busy ) {
@@ -287,6 +289,9 @@ export class Player {
 
 		const p = this.position;
 		if ( depth > 0.12 ) return 'water';
+		// stone stairs and floors (Colliders surfaces) name their own
+		const kind = this.colliders.surfaceAt && this.colliders.surfaceAt( p.x, p.z, p.y + 0.1 );
+		if ( kind ) return kind;
 		const onWood = this.colliders.groundHeightAt( p.x, p.z, p.y + 0.1 ) > this.terrain.heightAt( p.x, p.z ) + 0.05;
 		if ( onWood ) return 'wood';
 		const h = this.terrain.heightAt( p.x, p.z );

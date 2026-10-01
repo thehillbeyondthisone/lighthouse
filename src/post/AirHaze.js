@@ -75,7 +75,10 @@ fn sunShadowHard( P: vec3f ) -> f32 {
 
 export class AirHaze {
 
-	constructor( { depthTexture, underwater, atmosphere, sky = null, clouds = null, terrain = null, csm = null } ) {
+	// beams: src/station/Beams.js (the lighthouse's beams and far lights in the haze), optional
+	constructor( { depthTexture, underwater, atmosphere, sky = null, clouds = null, terrain = null, csm = null, beams = null } ) {
+
+		this.beams = beams;
 
 		this.depthTexture = depthTexture;
 		this.uw = underwater;
@@ -340,7 +343,7 @@ fn hazeVisibility( P: vec3f ) -> f32 {
 		if ( this._compositeModule ) return this._compositeModule;
 		this._compositeModule = new ShaderModule( {
 			name: 'haze-composite',
-			deps: [ this.module ],
+			deps: [ this.module, this.beams && this.beams.module ].filter( Boolean ),
 			bindings: {
 				hazeLow: { texture: () => this.hist[ this._hc ].texture },
 				hazeSS: { texture: () => this.ssShafts.texture },
@@ -443,6 +446,8 @@ fn hazeApply( uv: vec2f, c: vec4f ) -> vec4f {
 				out = max( out + near - deficit, vec3f( 0.0 ) );
 			}
 
+			// ---- the lighthouse's beams and the far lights, scattered in the same haze
+${ this.beams ? '\t\t\tout += beamsInScatter( underwaterParams.camPos, dir, select( dist, 1e6, sky ), hazeParams.density, frame.seaLevel );\n' : '' }
 			// ---- screen-space god rays: sun colour x phase x the near air's haze depth
 			if ( hazeParams.ssFade > 0.001 ) {
 				let rays = textureSampleLevel( hazeSS, smpLinearClamp, uv, 0.0 ).r;

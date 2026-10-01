@@ -1,25 +1,123 @@
-# Tidewater
+# Seven Hunters
 
-An island fishing game for the browser. Cast from the pier, the beach or your own boat, fight the fish,
-sell your catch to Joe at the fish stand, and spend it on better gear at Marta's chandlery. Around it is a
-real-time tropical island and ocean: swim the reef, drive the boat out to deep water, and watch a humpback
-breach. It runs directly on WebGPU and WGSL with its own small rendering engine, no framework.
+**15 December 1900.** The new light on Eilean Mòr, in the Flannan Isles twenty miles west of Lewis, goes dark.
+On Boxing Day the relief boat finds the station empty. Three keepers are never found.
 
-**Play it:** https://dgreenheck.github.io/tidewater/
+**3 January 1901.** The Northern Lighthouse Board needs the light kept. You are put ashore with the stores, and the
+swell turns the boat back before the other two men can land. Keep her lit.
 
-![Fishing off the pier at golden hour](docs/screenshot.jpg)
+Seven Hunters is a first-person game about one night keeping the light: a playable demo of a longer game in
+the lineage of *Firewatch* (the plan is in [`docs/PLAN.md`](docs/PLAN.md)). It runs in the browser on WebGPU,
+on its own small WGSL engine, and grew out of [Tidewater](#tidewater), an island fishing game on the same
+engine, which is still in here.
 
-![The beach in the late afternoon](docs/screenshot-beach.jpg)
+**Play it:** https://thehillbeyondthisone.github.io/lighthouse/
+
+![The light at dusk on Eilean Mòr, 3 January 1901](docs/screenshot-flannan.jpg)
+
+## The night
+
+About twenty to thirty minutes, from 13.40 on the landing stage to the journal after sunrise.
+
+- Climb from the east landing to the station, find the keepers' room and the Board's letter.
+- Light the lamp at sunset (15.09) and wind the machine that turns the lens: two white flashes every 30
+  seconds, the light's real character. The machine runs down in three hours, and its bell warns you.
+- Chalk the observations on the slate at six and at nine.
+- After dark, a light on Gallan Head, 33 km east on Lewis: the Watcher. Read her Morse through the telescope
+  and answer from the signal lamp on the walkway, with the Board's code (quick) or your own words spelled out
+  (slow: the clock runs while you send). She can only be seen while the air is clear.
+- Then the haar comes in from the west, and the beams go round in it.
+- Write up the journal in the morning. What you saw, and what you leave out, is yours to decide.
+
+The island is Eilean Mòr from the real elevation data, with Lewis, Harris and St Kilda across the sea (they
+show only on clear days), the sun and the full moon of 3 January 1901 at 58°N, and the station as it stood:
+the tower, the keepers' house, the landings, the tramways and St Flannan's chapel. The record of December 1900
+is real; Walter Innes, Ceit Macleod and the Board's letter are fiction (`docs/PLAN.md` §2.7).
+
+## Controls
+
+| Key | Action |
+|---|---|
+| W A S D | Walk (Shift to hurry) |
+| Mouse | Look (click to capture the mouse, Esc to release it) |
+| E | Use: doors and the gate, the letter, the slate, the journal, the signal lamp. **Hold** E to light the lamp and to wind the machine |
+| Right mouse | Look through the telescope (once you have it) |
+| L | Hand lamp |
+| Space | Read the Watcher's signals faster |
+| M | Mute |
+| H | Settings panel |
+| P | Photo mode |
+| F1 or ? | All controls |
+
+The night is saved in the browser as you go; reloading offers to continue it.
 
 ## Requirements
 
 - A browser with WebGPU: a recent Chrome, Edge or Safari.
-- A capable GPU. It targets 60 fps at 2560×1267 on an Apple M5 Pro, and dynamic resolution scales
-  the render down on slower machines.
+- A capable GPU. Dynamic resolution scales the render down on slower machines.
 - The first load compiles several hundred shaders, which can take a minute or more. Later visits are
   faster because the browser caches them.
 
-## Features
+## URL options
+
+Add these to the URL, for example `?nostory&vis=90`:
+
+| Option | Effect |
+|---|---|
+| `setting=tidewater` | Tidewater, the island fishing game |
+| `nostory` | The Flannans without the story: walk the island freely |
+| `lamp` | The lamp lit and turning from the start |
+| `vis=<km>` | Visibility at sea level (with `nostory`; the story keeps its own weather) |
+| `style=poster` | The Style Lab's looks: `poster`, `albumen`, `cyanotype` (docs/PLAN.md §4) |
+| `fly` | Start in the free camera (F toggles it) |
+| `noAudio` | Disable sound |
+| `noClouds` | Skip the volumetric clouds |
+| `noHaze` | Skip the haze, the sun shafts and the beams |
+
+## Running locally
+
+```sh
+npm install
+npm run dev      # http://127.0.0.1:5189
+npm run build    # static build in dist/
+npm test         # logic tests (and the GPU smoke test, which needs a WebGPU adapter)
+```
+
+`node test/demo-walk.mjs` walks the route from the landing stage up the tower to the walkway, and
+`node test/demo-story.mjs` plays the whole night through, both without a GPU. `npm run shots` renders
+screenshots of the real game without a browser or GPU (see `HISTORY.md`).
+
+Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`.
+
+## Project layout
+
+| Folder | Contents |
+|---|---|
+| `src/story/` | Seven Hunters' night: the story director, interactions, the Watcher and Morse, the script, the pages |
+| `src/station/` | The light: the lamp, the clockwork and the lens's turn; the beams and far lights in the haze |
+| `src/game/` | Tidewater's fishing game: rod, bites, the fight, catch card, cooler and log, vendors and stalls, guide, minimap, HUD |
+| `src/engine/` | The rendering engine: math, scene graph and geometry, GPU resources, WGSL shader composition, materials, lighting and shadows |
+| `src/ocean/` | FFT ocean, water surface and material, shore waves, breakers, swash, wake, caustics, underwater lighting |
+| `src/sky/` | Atmosphere, clouds, sky and environment |
+| `src/world/` | Terrain, village, pier, reef, fish, vegetation, rocks, debris, wildlife, whale, boat |
+| `src/post/` | Post chain: AO, underwater composite, haze, TAAU, motion blur, bloom, lens flare, droplets |
+| `src/materials/` | Shared lighting: shadow filtering, bounce light, contact shadows, local lights, LOD fades |
+| `src/player/` | Walking, swimming, the boat and the free camera |
+| `src/audio/` | The sample-based soundscape |
+| `src/ui/` | Settings panel, loading screen and HUD |
+| `tools/` | Scripts that fetch and convert the characters, stall props and fishing sounds |
+| `test/` | Headless engine smoke test and game-logic tests (`npm test`), and HUD / loader dev pages |
+
+## Tidewater
+
+An island fishing game for the browser, by Daniel Greenheck: cast from the pier, the beach or your own boat,
+fight the fish, sell your catch to Joe at the fish stand, and spend it on better gear at Marta's chandlery.
+Around it is a real-time tropical island and ocean. Open it with `?setting=tidewater`; the original is at
+https://dgreenheck.github.io/tidewater/.
+
+![Fishing off the pier at golden hour](docs/screenshot.jpg)
+
+### Features
 
 **Fishing**
 - A spinning rod and reel that cast, reel and bend under load, with the bail, rotor and crank animated.
@@ -71,7 +169,7 @@ breach. It runs directly on WebGPU and WGSL with its own small rendering engine,
   engine, footsteps by surface, underwater ambience, whale song, and the rod and reel (casts, the bail,
   reeling, the drag, line snaps, splashes).
 
-## Controls
+### Tidewater controls
 
 | Key | Action |
 |---|---|
@@ -94,7 +192,7 @@ breach. It runs directly on WebGPU and WGSL with its own small rendering engine,
 | P | Photo mode |
 | F1 or ? | All controls |
 
-### Fishing
+#### Fishing
 
 Walk the deck of the boat while it drifts, or fish from the pier and the beach. Cast, wait for the bobber
 to dip and strike when it's pulled under, then play the fish: keep the line tension in the green band,
@@ -106,47 +204,6 @@ night fishing. The boat burns diesel at the helm; fill up at the chandlery. Prog
 
 The settings panel (H) exposes the sea state, time of day, sun azimuth, clouds, haze, post-processing and
 more.
-
-## URL options
-
-Add these to the URL, for example `?fly&noAudio`:
-
-| Option | Effect |
-|---|---|
-| `fly` | Start in the free camera |
-| `noAudio` | Disable sound |
-| `noClouds` | Skip the volumetric clouds |
-| `noHaze` | Skip the haze and sun shafts |
-| `noCaustics` | Skip caustics |
-| `noVeg` | Skip vegetation |
-| `noSim` | Skip the swash (shallow-water) simulation |
-
-## Running locally
-
-```sh
-npm install
-npm run dev      # http://127.0.0.1:5189
-npm run build    # static build in dist/
-```
-
-Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`.
-
-## Project layout
-
-| Folder | Contents |
-|---|---|
-| `src/game/` | The fishing game: rod, bites, the fight, catch card, cooler and log, vendors and stalls, guide, minimap, HUD |
-| `src/engine/` | The rendering engine: math, scene graph and geometry, GPU resources, WGSL shader composition, materials, lighting and shadows |
-| `src/ocean/` | FFT ocean, water surface and material, shore waves, breakers, swash, wake, caustics, underwater lighting |
-| `src/sky/` | Atmosphere, clouds, sky and environment |
-| `src/world/` | Terrain, village, pier, reef, fish, vegetation, rocks, debris, wildlife, whale, boat |
-| `src/post/` | Post chain: AO, underwater composite, haze, TAAU, motion blur, bloom, lens flare, droplets |
-| `src/materials/` | Shared lighting: shadow filtering, bounce light, contact shadows, local lights, LOD fades |
-| `src/player/` | Walking, swimming, the boat and the free camera |
-| `src/audio/` | The sample-based soundscape |
-| `src/ui/` | Settings panel, loading screen and HUD |
-| `tools/` | Scripts that fetch and convert the characters, stall props and fishing sounds |
-| `test/` | Headless engine smoke test and game-logic tests (`npm test`), and HUD / loader dev pages |
 
 ## Credits and license
 

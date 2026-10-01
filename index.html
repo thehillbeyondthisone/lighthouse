@@ -3,31 +3,44 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>Tidewater</title>
-	<link rel="preload" as="image" href="ui/keyart-720.jpg" imagesrcset="ui/keyart-720.jpg 1280w, ui/keyart.jpg 2560w" imagesizes="100vw" />
+	<title>Seven Hunters</title>
+	<meta name="description" content="Seven Hunters: a night alone keeping the light on Eilean Mòr, the Flannan Isles, January 1901. A WebGPU demo." />
+	<script>
+		// ?setting=tidewater: the island fishing game this began as (its own loader text and key art)
+		if ( /[?&]setting=tidewater\b/.test( location.search ) ) document.documentElement.classList.add( 'is-tidewater' );
+	</script>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Caveat+Brush&family=Kalam:wght@400;700&display=swap" rel="stylesheet" />
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Caveat+Brush&family=Kalam:wght@400;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" />
 	<link rel="stylesheet" href="/src/ui/ui.css" />
+	<link rel="stylesheet" href="/src/story/story.css" />
 	<style>
 		html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
 		#app, #app canvas { display: block; }
 		#fps { position: fixed; top: 10px; left: 12px; z-index: 50; font: 500 12px/1.2 'JetBrains Mono', ui-monospace, monospace;
 			color: #e8f6ff; background: rgba(8, 14, 22, 0.55); padding: 5px 9px; border-radius: 6px; pointer-events: none;
 			backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); letter-spacing: 0.02em; }
+		.is-tidewater .sh-only, html:not(.is-tidewater) .tw-only { display: none !important; }
+		html:not(.is-tidewater) .loader-title { font-family: 'IM Fell English', Georgia, serif; font-weight: normal; letter-spacing: 0.06em; }
+		html:not(.is-tidewater) .loader-kicker, html:not(.is-tidewater) .loader-tagline { font-family: 'IM Fell English', Georgia, serif; }
+		html:not(.is-tidewater) #loader { background: radial-gradient(ellipse at 50% 80%, #1c2433, #07090d 70%); }
 	</style>
 </head>
 <body>
 	<div id="app"></div>
 	<div id="fps">-- fps</div>
-	<div id="loader" role="status" aria-live="polite" aria-label="Loading Tidewater">
-		<img class="loader-art" src="ui/keyart-720.jpg" srcset="ui/keyart-720.jpg 1280w, ui/keyart.jpg 2560w" sizes="100vw" alt="" decoding="async" fetchpriority="high" onload="this.classList.add('is-in')" />
+	<div id="loader" role="status" aria-live="polite" aria-label="Loading">
+		<img class="loader-art tw-only" src="ui/keyart-720.jpg" srcset="ui/keyart-720.jpg 1280w, ui/keyart.jpg 2560w" sizes="100vw" alt="" decoding="async" onload="this.classList.add('is-in')" />
+		<img class="loader-art sh-only" src="ui/keyart-flannan.jpg" alt="" decoding="async" fetchpriority="high" onload="this.classList.add('is-in')" onerror="this.remove()" />
 		<div class="loader-scrim"></div>
 		<div class="loader-inner">
 			<div class="loader-brand">
-				<p class="loader-kicker">An island fishing game</p>
-				<h1 class="loader-title">TIDEWATER</h1>
-				<p class="loader-tagline">Take the boat out, work the reef and the deep water, and sell your catch to Joe before dark.</p>
+				<p class="loader-kicker tw-only">An island fishing game</p>
+				<h1 class="loader-title tw-only">TIDEWATER</h1>
+				<p class="loader-tagline tw-only">Take the boat out, work the reef and the deep water, and sell your catch to Joe before dark.</p>
+				<p class="loader-kicker sh-only">Eilean Mòr, the Flannan Isles · January 1901</p>
+				<h1 class="loader-title sh-only">Seven Hunters</h1>
+				<p class="loader-tagline sh-only">Three keepers vanished from this rock in December. The Board needs the light kept. Tonight it is yours.</p>
 			</div>
 			<div class="loader-panel">
 				<div class="loader-row">
@@ -38,7 +51,15 @@
 				<div class="loader-note">The first launch compiles the shaders and can take a minute or two. Later visits load much faster.</div>
 				<div class="loader-tips">
 					<span class="loader-tip-label">Tip</span>
-					<div class="loader-tip-list">
+					<div class="loader-tip-list sh-only">
+						<p class="loader-tip">The light is lit at sunset and put out at sunrise. Between, it must not fail.</p>
+						<p class="loader-tip">Hold <kbd>E</kbd> to light the lamp and to wind the machine: the prompt fills while you hold.</p>
+						<p class="loader-tip">The machine that turns the lens runs down in three hours. A bell warns you.</p>
+						<p class="loader-tip">Once you have the telescope, hold the right mouse button to look through it.</p>
+						<p class="loader-tip">Press <kbd>L</kbd> for your hand lamp. The tower is dark inside.</p>
+						<p class="loader-tip">Gallan Head, on Lewis, is 33 km east. You can only see her light when the air is clear.</p>
+					</div>
+					<div class="loader-tip-list tw-only">
 						<p class="loader-tip">Press <kbd>R</kbd> for the rod. Hold the left mouse button to wind up, release to cast: the longer you hold, the farther it goes.</p>
 						<p class="loader-tip">Watch the bobber. A few nibbles, then it's pulled under: click the left mouse button that moment to set the hook.</p>
 						<p class="loader-tip">In a fight, hold to reel but keep the line tension in the green. Ease off when the fish runs, or the line snaps.</p>
