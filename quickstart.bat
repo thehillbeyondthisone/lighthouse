@@ -19,7 +19,7 @@ echo Building...
 call npm run build
 if errorlevel 1 ( pause & exit /b 1 )
 
-echo Starting at http://127.0.0.1:5189 (WebGPU browser required, e.g. Chrome/Edge)
-start "" http://127.0.0.1:5189
+echo Starting at http://127.0.0.1:5189/?setting=flannan (WebGPU browser required, e.g. Chrome/Edge)
+start "" "http://127.0.0.1:5189/?setting=flannan"
 call npm run dev
 pause

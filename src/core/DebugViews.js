@@ -43,7 +43,7 @@ export const VIEWS = {
 	fChapel: { p: [ - 16, 71.8, 62 ], at: [ - 7, 74.5, 49 ], time: 12.4 }, // St Flannan's chapel below the light
 	fLewis: { p: [ 3.2, 99.9, 0.8 ], at: [ 943, 99.9, 343 ], time: 12.4 }, // from the gallery east to Lewis and Harris
 	fLewisClear: { p: [ 3.2, 99.9, 0.8 ], at: [ 943, 99.9, 343 ], time: 12.4, vis: 90 }, // ... on a clear day
-	// through a telescope (fov in degrees): Gallan Head, 33 km, where the Watcher keeps his post; the Harris hills
+	// through a telescope (fov in degrees): Gallan Head, 33 km, where the Watcher keeps her post; the Harris hills
 	fGallan: { p: [ 3.2, 99.9, 0.8 ], at: [ 32503, 60, 5435 ], fov: 5, time: 12.4, vis: 90 },
 	fHarris: { p: [ 3.2, 99.9, 0.8 ], at: [ 45000, 160, 38000 ], fov: 9, time: 12.4, vis: 90 },
 	fStKilda: { p: [ - 3.2, 99.9, 0.8 ], at: [ - 59400, 150, 52300 ], fov: 4, time: 12.4, vis: 110 },
@@ -51,10 +51,24 @@ export const VIEWS = {
 	fWestLanding: { p: [ - 420, 16, 145 ], at: [ - 330, 22, 92 ], time: 12.4 }, // the west landing's geo
 	fAerial: { p: [ 230, 230, 320 ], at: [ - 80, 40, 10 ], time: 12.4 },
 	fDusk: { p: [ - 42, 73.4, 44 ], at: [ - 3, 88, 3 ], time: 15.3 },
+	// the light at night: the lantern from the yard, the beams from the chapel's slope and from the sea
+	// (`beam`: a beam group's bearing, degrees from east toward south)
+	fLantern: { p: [ - 10.5, 82.25, 18.5 ], at: [ 0, 99, 0 ], time: 19, beam: 200 },
+	fBeams: { p: [ - 120, 70, 160 ], at: [ 0, 104, 0 ], time: 19, beam: 20 },
+	fBeamsSea: { p: [ 2600, 8, 1500 ], at: [ 0, 101, 0 ], time: 19, beam: 75 },
+	fFlash: { p: [ 2600, 8, 1500 ], at: [ 0, 101, 0 ], time: 19, beam: 22.5 }, // a panel's beam on the eye
+	fBeamsAerial: { p: [ 230, 230, 320 ], at: [ - 80, 60, 10 ], time: 19, beam: 100 },
+	// Gallan Head at night: from the gallery with the eye, and through the telescope (a clear night)
+	fWatcher: { p: [ 3.2, 99.9, 0.8 ], at: [ 32503, 60, 5435 ], time: 19, vis: 90, beam: 300 },
+	fWatcherVis30: { p: [ 3.2, 99.9, 0.8 ], at: [ 32503, 60, 5435 ], time: 19, beam: 300 }, // at the usual 30 km
+	fWatcherScope: { p: [ 3.2, 99.9, 0.8 ], at: [ 32503, 72, 5435 ], fov: 3, time: 19, vis: 90, beam: 300 },
 };
 
-// a view's own visibility (km, `vis`) and field of view (degrees, `fov`), or the app's
+// a view's own visibility (km, `vis`) and field of view (degrees, `fov`), or the app's; at the
+// Flannans `beam` (degrees from east toward south) turns the lens so a beam group points there
 export function applyViewVisibility( app, v ) {
+
+	if ( app.lamp && v.beam !== undefined ) app.lamp.angle = v.beam * Math.PI / 180;
 
 	const cam = app.camera;
 	if ( cam ) {

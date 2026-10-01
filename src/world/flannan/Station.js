@@ -438,7 +438,8 @@ function tower( ctx ) {
 
 		const a = ( i + 0.5 ) / N * Math.PI * 2;
 		B.pushAt( 0, 0, 0, Math.PI / 2 - a );
-		B.part( 'glass', quad01Part( pw, g1 - g0 ), 0, ( g0 + g1 ) / 2, pc, { tint: [ 0.2, 0.22, 0.2 ], data: [ rand.next() * 0.3, 0, 1, 0 ] } );
+		// (glass kind 2: the lens shows through it, src/materials/Beacons.js)
+		B.part( 'glass', quad01Part( pw, g1 - g0 ), 0, ( g0 + g1 ) / 2, pc, { tint: [ 0.2, 0.22, 0.2 ], data: [ rand.next() * 0.3, 2, 1, 0 ] } );
 		B.pop();
 
 	}
@@ -492,7 +493,7 @@ function tower( ctx ) {
 	}
 
 	colliders.addCylinder( 0, 0, 3.4, Y0 - 0.5, deck, { tag: 'tower' } );
-	// the light itself (the lamp inside the lens; the beams are docs/PLAN.md §5.4)
+	// the lamp's glow on the lantern and the gallery (the beams and the lens: src/station/Lamp.js)
 	lights.push( { position: new Vector3( 0, gm, 0 ), color: new Color( 1.0, 0.8, 0.52 ), intensity: 10, kind: 'lantern' } );
 	return { focal: gm };
 
