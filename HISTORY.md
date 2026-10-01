@@ -88,8 +88,12 @@ publishes `main`.
 - **Review views** for the demo's spaces: `dRoom`, `dStair`, `dLantern`, `dBeams` (the haar), `dBeamsClear`,
   `dWalkway`, `dLanding`, `dYardMoon`, `dRoomNight`; `?lamp` lights the lamp for them.
 
-Not yet seen on a real GPU: performance, the pointer-lock flow between pages, and the audio. The demo has no
-key art of its own yet (the loader falls back to a dark gradient if `public/ui/keyart-flannan.jpg` is absent).
+The loader's key art (`public/ui/keyart-flannan.jpg`, also `docs/screenshot-flannan.jpg`) is the `dKeyart`
+view rendered by `npm run shots` at 1280 x 720 with 80 frames (24 left the clouds blocky). The story's
+screens were checked in headless Chromium through `test/story-ui.html` (the game itself can't run there:
+see the Style Lab entry).
+
+Not yet seen on a real GPU: performance, the pointer-lock flow between pages, and the audio.
 
 ## 2026-09-29 (later): Eilean Mòr, the light station and the far shore
 

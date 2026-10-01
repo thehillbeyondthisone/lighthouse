@@ -13,6 +13,8 @@ engine, which is still in here.
 
 **Play it:** https://thehillbeyondthisone.github.io/lighthouse/
 
+![The light at dusk on Eilean Mòr, 3 January 1901](docs/screenshot-flannan.jpg)
+
 ## The night
 
 About twenty to thirty minutes, from 13.40 on the landing stage to the journal after sunrise.
