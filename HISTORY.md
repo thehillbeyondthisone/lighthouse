@@ -31,13 +31,12 @@ entries first.
                    --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
   ```
 
-<<<<<<< HEAD
 ## 2026-10-01: quickstart.bat
 
 - Added `quickstart.bat` (Windows): checks for Node, runs `npm install` if needed, `npm run build`, then opens
   http://127.0.0.1:5189 and starts the dev server. It opens `/?setting=flannan`: the plain URL still boots Tidewater's island, the Flannan Isles scene is opt-in.
   Merged the latest commit from the firewatch branch. Verified `npm install && npm run build` succeed on Linux.
-=======
+
 ## 2026-09-30: the light, its beams, and the Watcher's lamp on Gallan Head
 
 docs/PLAN.md §8 task 2. At the Flannans (`?setting=flannan`) the light is now lit at sunset: its beams
@@ -98,7 +97,6 @@ lamp shows on Gallan Head, but only through clear air.
     needs a spill-free mode;
   - no shadowing of the beams (the lantern's astragals, the terrain);
   - no telescope camera mode or signal lamp for the player (Phase 4).
->>>>>>> origin/claude/firewatch-style-game-framework-iurrd1
 
 ## 2026-09-29 (later): Eilean Mòr, the light station and the far shore
 
