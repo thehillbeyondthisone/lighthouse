@@ -229,5 +229,25 @@ ok( rows.some( ( r ) => r.includes( 'Eilean Tighe' ) ) && rows.some( ( r ) => r.
 ok( rows.some( ( r ) => r.startsWith( '03.00' ) && ( SAY_NAME ? r.includes( 'country' ) : r.includes( 'west landing' ) ) ), 'and a line at three o\'clock' );
 ok( localStorage.getItem( 'sevenhunters.night1.v1' ) === null, 'the save is cleared at the end' );
 
+// a night where she is never answered: the haar takes her, the objective moves on
+{
+
+	const s2 = new Story( app );
+	s2.ui.card = s2.ui.fade = async () => {};
+	s2.ui.read = async () => {};
+	await s2.start();
+	app.lamp.lit = true;
+	app.lamp.wind = 1;
+	app.lamp.running = true;
+	s2.setBeat( 'watch' );
+	s2.h = 16.6;
+	s2.update( 0.1 );
+	s2.h = 21.5;
+	app.lamp.wind = 1;
+	for ( let i = 0; i < 5; i ++ ) s2.update( 0.1 );
+	ok( s2.watcher.state === 'done' && ! /Gallan Head/.test( s2.goal() ), `unanswered, the haar takes her: '${ s2.goal() }'` );
+
+}
+
 console.log( fails ? `${ fails } failed` : 'all passed' );
 process.exit( fails ? 1 : 0 );

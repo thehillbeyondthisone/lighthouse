@@ -29,6 +29,7 @@ export const GOALS = {
 	answer: 'Answer Gallan Head with the signal lamp on the walkway.',
 	obs: 'Chalk the six o\'clock observations on the slate in the keepers\' room.',
 	bell: 'The machine is running down. Wind it.',
+	evening: 'Keep the watch. The machine wants winding every three hours.',
 	haar: 'Keep the watch.',
 	gate: 'See to the gate.',
 	night: 'Keep the watch until dawn.',

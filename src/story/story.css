@@ -263,6 +263,7 @@
 .sh-end-side .sh-card-line { animation: none; opacity: 0.9; }
 .sh-end-credits { font-size: 14px; line-height: 1.5; opacity: 0.6; margin: 18px 0 8px; }
 .sh-end .sh-btn { background: #ece3cf; color: #15130f; }
+.sh-end .sh-btn.is-quiet { background: transparent; color: #d8cfba; }
 
 /* ---- the Morse strip, bottom centre */
 .sh-strip {
@@ -284,7 +285,7 @@
 .sh-strip-from { font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.6; margin-bottom: 6px; }
 .sh-strip-text { font-size: 22px; letter-spacing: 0.08em; min-height: 1.3em; }
 .sh-strip-cursor { color: var(--sh-lamp); animation: sh-blink 0.8s steps(1) infinite; }
-.sh-strip-morse { margin-top: 6px; font-family: ui-monospace, monospace; font-size: 13px; color: var(--sh-lamp); opacity: 0.75; letter-spacing: 0.12em; white-space: nowrap; overflow: hidden; }
+.sh-strip-morse { margin-top: 6px; font-family: ui-monospace, monospace; font-size: 15px; line-height: 1.6; color: var(--sh-lamp); opacity: 0.75; letter-spacing: 0.12em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .sh-strip-hint { margin-top: 8px; font-size: 14px; font-style: italic; opacity: 0.6; }
 
 @keyframes sh-blink { 50% { opacity: 0; } }

@@ -616,6 +616,14 @@ export class Story {
 		const fwd = new Vector3( 0, 0, - 1 ).applyQuaternion( cam.quaternion );
 		const inView = fwd.dot( _v ) > Math.cos( MathUtils.degToRad( Math.max( 1.2, cam.fov * 0.35 ) ) );
 		const watched = visible && ( this.signal || ( this.tel > 0.6 && inView ) );
+		// the haar takes her: mid-message, or before she was ever answered
+		if ( ! w.talking && ( w.state === 'calling' || w.state === 'steady' ) && ! visible && this.h > this.haar ) {
+
+			w.lose();
+			this.row( this.h, 'Gallan Head lost in the haze.' );
+
+		}
+
 		if ( w.talking && ! visible && this.h > HER_CALL ) {
 
 			w.lose();
