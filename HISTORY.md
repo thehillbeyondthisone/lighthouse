@@ -10,7 +10,10 @@ entries first.
   `lighthouse`): an eerie, isolated, Firewatch-style narrative game on Eilean Mòr in the Flannan Isles, in
   the winter of 1900–01. The master plan is [`docs/PLAN.md`](docs/PLAN.md). Its §8 lists the phases and the
   next tasks, and its §10 lists the decisions still open.
-- **Branch.** Work happens on `claude/firewatch-style-game-framework-iurrd1`.
+- **The demo.** The default page is now Seven Hunters' first night (`src/story`); `?setting=tidewater` is the
+  fishing game, `?nostory` the Flannans to walk freely. See the newest entry below.
+- **Branch.** The demo was built on `claude/beautiful-bell-1cb1e6` (the planning and the first Flannan work on
+  `claude/firewatch-style-game-framework-iurrd1`, merged as PR 1).
 - **Run it.** `npm install`, then `npm run dev` (http://127.0.0.1:5189) or `npm test`.
 - **GPU tests in a cloud container with no GPU.** Point Dawn at the SwiftShader driver that ships with
   Playwright's Chromium:
@@ -30,6 +33,63 @@ entries first.
   npm run shots -- --views=beach,aerial --styles=photoreal,poster,albumen --times=12.4,14.8 \
                    --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
   ```
+
+## 2026-10-01: a playable demo, the first night
+
+The user agreed the plan for a playable demo (one night, 20-30 minutes) and asked for it to replace the public
+link, in whatever look is easiest: Photoreal. Seven Hunters is now the default page; the Pages workflow
+publishes `main`.
+
+- **The night** (`src/story/Story.js`, the words in `Script.js`): Thursday 3rd January 1901, a real
+  Thursday, with a full moon rising over Lewis at sunset (15.09). From the east landing at 13.40: up to the
+  station, the keepers' room and the Board's letter (the tutorial, in the fiction), light the lamp at sunset,
+  wind the machine, the slate at six and nine, the Watcher at dusk, the haar from the west at 20.36, a light
+  on Eilean Tighe seen from the walkway, the gate found moved, "keep the watch until dawn", the lamp out, the
+  journal written and signed, and the end page. The clock runs 1 game minute in 2.5 s before the lamp is lit
+  and a minute a second after (a quarter of that while she sends), stops while a page is open, and skips
+  with "keep the watch". The weather is scripted (`weatherAt`): 60 km visibility at dusk, 1.3 km in the
+  haar. Saved in `localStorage` (`sevenhunters.night1.v1`); reloading offers to continue.
+- **The Watcher** (`Watcher.js`): Ceit Macleod's lamp on Gallan Head. Steady while she watches, the call,
+  then her messages in real Morse timing (a 45 ms unit), read letter by letter only while you watch through
+  the telescope (right mouse, after you take it from the lantern's sill) or stand at the signal lamp on the
+  walkway. Your answers come from the Board's code book (quick) or are spelled out (slow); each costs the
+  clock. The haar loses her mid-message. Saying the island's name ("good night from Flannan"), against her
+  advice, brings the haar sooner and changes a line in the journal.
+- **The station inside** (`Station.js`): the keepers' room off the yard (one room of the house; the rest is
+  walled off), the tower's doorway from it, 88 stone treads round the weight tube, a landing, a railed hatch
+  and an iron stair into the lantern, the lens on its pedestal with the rotation machine and its crank, and
+  a door through the lantern onto the walkway facing Gallan Head. The east gate has leaves. The lens,
+  crank, doors, gate, telescope and the lantern's glass are moving parts (`assembleStation`).
+- **Colliders** gained round walls with doorway gaps (`addRing`) and walkable height functions
+  (`addSurface`, the spiral stair). The landing flights' steps are no longer solid (a 45° flight has treads
+  shorter than the walker is wide: the solid boxes ahead blocked it), and the ground is cut under them after
+  the tracks' grading, which had lifted it through the top of the east flight: the flight was never
+  climbable before.
+- **The light** (`src/station/Lamp.js`): the burner warms up over 18 s; the clockwork runs down over 3 game
+  hours, its bell rings below 6 %; the lens turns once a minute with two pairs of bullseyes 25° apart, which
+  gives the real character, Fl(2) W 30s (flashes 4.2 s apart). The lens material (`StationMaterials.js`)
+  draws prism rings and bullseyes that blaze as they sweep past you.
+- **Beams and far lights** (`src/station/Beams.js`, in `AirHaze`'s composite under `HZ_BEAMS`): the four
+  beams as Gaussian tubes whose single scattering in the haze is integrated analytically at the view ray's
+  closest approach (faint in clear air, sweeping shafts in the haar), and points of light dimmed by the haze
+  and dropped by the curvature. Intensities are tuned on the shots (`dBeams`, `dBeamsClear`, `dLantern`).
+- **Interiors**: `installUnderwaterLighting` takes `interiors` (boxes and cylinders) and cuts the sky's
+  ambient inside them (generated WGSL; none in Tidewater, whose shaders are unchanged in effect).
+- **Sound**: `SoundScape` has a `flannan` mode (no palms, crickets, songbirds, terns or beach surf; the sea
+  bed placed off the cliffs; indoors muffled, your steps not). `src/audio/StationSound.js` synthesises the
+  escapement, bell, ratchet, burner, doors, shutter and the wind in the glazing, and booms the sea in the geos
+  from the surf recordings.
+- **Shipping**: the loader, title, brand, start screen and help are Seven Hunters' unless
+  `?setting=tidewater`; the reef, whale, wildlife (tropical birds), marine snow and caustics are off at the
+  Flannans by default; the "flashlight" is a keeper's hand lamp there. The README leads with the demo.
+- **Tests** (no GPU): `test/demo-walk.mjs` walks the real Player from the landing stage up the tower and out
+  onto the walkway (68 s); `test/demo-story.mjs` plays the whole night through with scripted page answers
+  (`--say` for the other ending line). Both are in `npm test`.
+- **Review views** for the demo's spaces: `dRoom`, `dStair`, `dLantern`, `dBeams` (the haar), `dBeamsClear`,
+  `dWalkway`, `dLanding`, `dYardMoon`, `dRoomNight`; `?lamp` lights the lamp for them.
+
+Not yet seen on a real GPU: performance, the pointer-lock flow between pages, and the audio. The demo has no
+key art of its own yet (the loader falls back to a dark gradient if `public/ui/keyart-flannan.jpg` is absent).
 
 ## 2026-09-29 (later): Eilean Mòr, the light station and the far shore
 

@@ -25,7 +25,7 @@ const HER_APPEAR = 16.4, HER_CALL = 16.5;
 const HAAR = 20.6; // the haar comes down (earlier if you said the island's name)
 const DAWN_SKIP = 32.4; // 08.24 on the 4th
 const SAVE_KEY = 'sevenhunters.night1.v1';
-const HER_LAMP = 7e5; // the Watcher's lamp (Beams far light intensity)
+const HER_LAMP = 1.5e5; // the Watcher's lamp (Beams far light intensity)
 const ISLET = new Vector3( 164, 44.6, 540 ); // Eilean Tighe's top
 
 const _v = new Vector3(), _w = new Vector3(), _eye = new Vector3();
@@ -831,6 +831,8 @@ export class Story {
 		// at the signal lamp the view is held on Gallan Head
 		if ( this.signal ) {
 
+			// (a page closing gives the walker its keys back: not while at the lamp)
+			app.input.enabled = false;
 			const cam = app.camera;
 			cam.position.set( TOWER.signalStand.x, TOWER.deck + 1.62, TOWER.signalStand.z );
 			cam.lookAt( this._herRender( _w ) );

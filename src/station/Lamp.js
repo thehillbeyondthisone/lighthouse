@@ -23,7 +23,7 @@ const DIP = 0.004; // rad: the beams aim at the horizon
 
 export class Lamp {
 
-	constructor( { lens = null, lensMaterial = null, light = null, origin = new Vector3( 0, 101, 0 ), intensity = 1.2e5 } = {} ) {
+	constructor( { lens = null, lensMaterial = null, light = null, origin = new Vector3( 0, 101, 0 ), intensity = 4000 } = {} ) {
 
 		this.lens = lens; // the turning group (Station.js assembleStation)
 		this.lensMaterial = lensMaterial;

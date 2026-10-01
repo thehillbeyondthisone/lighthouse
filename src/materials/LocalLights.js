@@ -140,6 +140,7 @@ export class LocalLights {
 	add( src ) {
 
 		src.phase = src.phase ?? Math.random() * 100;
+		if ( src.day ) this.dayLights = true;
 		this.sources.push( src );
 		return src;
 
@@ -177,8 +178,9 @@ export class LocalLights {
 
 			fl.dir.lerp( _f, 1 - Math.exp( - dt / 0.06 ) ).normalize();
 			fl.position.setFromMatrixPosition( camera.matrixWorld ).addScaledVector( _r, 0.2 ).addScaledVector( _u, - 0.22 ).addScaledVector( _f, 0.15 );
-			// faint against daylight (the scene's night is exposed far brighter than physical)
-			const k = fl.intensity * ( 0.08 + 0.92 * smooth( G.night.value, 0.0, 0.6 ) );
+			// faint against daylight (the scene's night is exposed far brighter than physical), but not
+			// indoors (boost: set by the app inside the station)
+			const k = fl.intensity * Math.max( 0.08 + 0.92 * smooth( G.night.value, 0.0, 0.6 ), fl.boost || 0 );
 			pos[ 0 ].set( fl.position.x, fl.position.y, fl.position.z, fl.range * fl.range );
 			col[ 0 ].set( fl.color.r * k, fl.color.g * k, fl.color.b * k, fl.cosInner );
 			dir[ 0 ].set( fl.dir.x, fl.dir.y, fl.dir.z, fl.cosOuter );
@@ -190,16 +192,18 @@ export class LocalLights {
 
 		}
 
-		// lamps: on from dusk (same ramp as the lantern glass), nearest first
+		// lamps: on from dusk (same ramp as the lantern glass), nearest first; daylight sources (day: true,
+		// daylight through a small window into a dark interior) the other way round
 		const on = smooth( G.night.value, 0.15, 0.75 ) * this.strength;
-		if ( on > 0.002 && this.enabled ) {
+		const onDay = ( 1 - smooth( G.night.value, 0.05, 0.5 ) ) * this.strength;
+		if ( ( on > 0.002 || ( onDay > 0.002 && this.dayLights ) ) && this.enabled ) {
 
 			const cp = camera.position;
 			const list = this._list;
 			list.length = 0;
 			for ( const s of this.sources ) {
 
-				if ( s.enabled === false ) continue;
+				if ( s.enabled === false || ( s.day ? onDay : on ) <= 0.002 ) continue;
 				if ( s.update ) s.update();
 				s.d2 = s.position.distanceToSquared( cp );
 				list.push( s );
@@ -215,7 +219,7 @@ export class LocalLights {
 				const s = list[ i ];
 				const fade = Number.isFinite( dCut ) ? smooth( Math.sqrt( s.d2 ), dCut, dCut * 0.8 ) : 1;
 				const fl2 = s.flicker ? 1 + s.flicker * Math.sin( this.time * 9 + s.phase ) * Math.sin( this.time * 5.3 + s.phase * 0.37 ) : 1;
-				const k = s.intensity * on * fade * fl2 * ( s.scale ?? 1 );
+				const k = s.intensity * ( s.day ? onDay : on ) * fade * fl2 * ( s.scale ?? 1 );
 				if ( k <= 1e-4 ) continue;
 				const r = s.range;
 				pos[ n ].set( s.position.x, s.position.y, s.position.z, r * r );

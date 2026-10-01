@@ -75,7 +75,7 @@ export function createLensMaterial() {
 	let glass = mix( 0.25 + 0.35 * belt, 1.0, bull );
 	s.albedo = mat.color;
 	s.roughness = mix( 0.05, 0.12, belt );
-	s.emissive = flame * mat.glow * ( glass * 3.0 + flash * 140.0 );
+	s.emissive = flame * mat.glow * ( glass * 1.6 + flash * 30.0 );
 `;
 	return m;
 

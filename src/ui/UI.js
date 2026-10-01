@@ -2149,12 +2149,13 @@ export class UI {
 						<h3>Move</h3>
 						${ row( wasd, 'Move' ) }
 						${ row( mouse, 'Look around<small>Click to capture</small>' ) }
-						${ row( k( 'Shift' ), 'Sprint, boat boost' ) }
-						${ row( k( 'Space' ), 'Jump, swim up' ) }
-						${ row( k( 'C' ), 'Crouch, dive' ) }
+						${ row( k( 'Shift' ), this.tidewater ? 'Sprint, boat boost' : 'Hurry' ) }
+						${ this.tidewater ? row( k( 'Space' ), 'Jump, swim up' ) + row( k( 'C' ), 'Crouch, dive' ) : row( k( 'Space' ), 'Jump' ) }
 					</section>
 					<section>
 						<h3>Interact</h3>
+						${ this.tidewater ? '' : row( k( 'E' ), 'Use<small>Hold to light the lamp, to wind the machine</small>' ) + row( k( 'RMB' ), 'Telescope<small>Hold, once you have it</small>' ) + row( k( 'L' ), 'Hand lamp' ) + row( k( 'Space' ), 'Read her signals faster' ) + row( k( 'F' ), 'Free camera' ) + row( k( 'M' ), 'Mute' ) }
+						${ ! this.tidewater ? '' : `
 						${ row( k( 'E' ), 'Interact<small>Board, helm, step ashore, trade</small>' ) }
 						${ row( k( 'V' ), 'Boat camera<small>1st / 3rd person</small>' ) }
 						${ row( k( 'R' ), 'Fishing rod<small>Take out / put away</small>' ) }
@@ -2164,7 +2165,7 @@ export class UI {
 						${ row( k( 'F' ), 'Free camera' ) }
 						${ row( k( 'T' ), 'Pause time' ) }
 						${ row( k( 'L' ), 'Flashlight' ) }
-						${ row( k( 'M' ), 'Mute' ) }
+						${ row( k( 'M' ), 'Mute' ) }`}
 					</section>
 					<section>
 						<h3>Interface</h3>

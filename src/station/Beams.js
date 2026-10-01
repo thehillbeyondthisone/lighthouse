@@ -68,13 +68,15 @@ fn beamsInScatter( cam: vec3f, dir: vec3f, dist: f32, density: f32, seaLevel: f3
 		let s = e + t * b;
 		if ( s <= 0.0 ) { continue; }
 		let q = r + dir * t - D * s;
-		let w = 0.25 + s * beamParams.spread;
+		let w = 0.5 + s * beamParams.spread;
 		let sinP = sqrt( denom );
 		// the tube's cross-section integrated along the ray (bounded where the ray runs along the beam)
 		let across = 2.5066 * w / max( sinP, w / max( s, 1.0 ) + 0.02 );
 		let core = exp( - dot( q, q ) / ( 2.0 * w * w ) );
 		let T = exp( - sigB * ( s + t ) );
-		out += beamParams.color * beamParams.dirs[ i ].w * sigB * beamsPhase( - b ) * core * across / ( w * w ) * T;
+		// (none inside the lantern: the pencil forms beyond the glazing)
+		let formed = smoothstep( 2.0, 6.0, s );
+		out += beamParams.color * beamParams.dirs[ i ].w * sigB * beamsPhase( - b ) * core * across / ( w * w ) * T * formed;
 	}
 	// far lights
 	for ( var j = 0; j < ${ MAX_FAR }; j++ ) {

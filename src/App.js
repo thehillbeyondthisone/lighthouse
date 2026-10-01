@@ -286,7 +286,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		// (the station's tower and keepers' room are dark inside: their ambient light is cut)
 		const interiors = this.flannan ? [
-			[ { cyl: [ 0, 0, TOWER.rIn + 0.3, TOWER.floor - 0.5, TOWER.deck - 0.05 ] }, 0.07 ],
+			[ { cyl: [ 0, 0, TOWER.rIn + 0.3, TOWER.floor - 0.5, TOWER.deck - 0.05 ] }, 0.22 ],
 			[ { box: [ ROOM.x0 - 0.3, TOWER.floor - 0.5, ROOM.z0 - 0.3, ROOM.x1 + 0.3, ROOM.ceiling + 0.3, ROOM.z1 + 0.3 ] }, 0.12 ],
 		] : [];
 		this.underwaterLighting = installUnderwaterLighting( {
@@ -323,6 +323,19 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			const sp = TOWER.signal, sd = new Vector3( sp.x, 0, sp.z ).normalize();
 			this.signalLight = this.localLights.add( { position: sp.clone().addScaledVector( sd, 0.15 ), dir: sd, cosInner: 0.9, cosOuter: 0.5, color: new Color( 1, 0.82, 0.55 ), intensity: 9, range: 9, kind: 'signal', scale: 0 } );
 			this.curvature = CURVATURE;
+			// daylight through the tower's four small windows and the keepers' room's two (by day only)
+			for ( const [ deg, h ] of [ [ 90, 6.4 ], [ 0, 9.4 ], [ - 90, 12.4 ], [ 180, 14.9 ] ] ) {
+
+				const a = deg * Math.PI / 180, n = new Vector3( - Math.cos( a ), - 0.25, - Math.sin( a ) ).normalize();
+				this.localLights.add( { position: new Vector3( Math.cos( a ) * ( TOWER.rIn - 0.15 ), STATION.yard + h + 0.3, Math.sin( a ) * ( TOWER.rIn - 0.15 ) ), dir: n, cosInner: 0.3, cosOuter: - 0.4, color: new Color( 0.82, 0.88, 1.0 ), intensity: 2.2, range: 7, kind: 'daylight', day: true } );
+
+			}
+
+			for ( const [ x, z, nz ] of [ [ - 6.5, ROOM.z0 + 0.25, 1 ], [ - 7.6, ROOM.z1 - 0.25, - 1 ] ] ) {
+
+				this.localLights.add( { position: new Vector3( x, TOWER.floor + 1.6, z ), dir: new Vector3( 0, - 0.3, nz ).normalize(), cosInner: 0.2, cosOuter: - 0.5, color: new Color( 0.85, 0.9, 1.0 ), intensity: 1.6, range: 7, kind: 'daylight', day: true } );
+
+			}
 			// a 1900 keeper's hand lamp, not a torch: warmer, wider, dimmer
 			const fl = this.localLights.flashlight;
 			fl.color.setRGB( 1.0, 0.62, 0.32 );
@@ -892,6 +905,8 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			if ( p.x > ROOM.x0 && p.x < ROOM.x1 && p.z > ROOM.z0 && p.z < ROOM.z1 && p.y < ROOM.ceiling ) indoor = 1;
 			inLantern = r < 2.2 && p.y > T.deck - 0.3 && p.y < T.deck + 4.5;
 			onWalkway = r >= 2.2 && r < 3.9 && Math.abs( p.y - T.deck - 1.6 ) < 1.5;
+			// the hand lamp at full strength indoors, day or night
+			this.localLights.flashlight.boost = indoor;
 			if ( this.stationSound ) this.stationSound.update( dt, {
 				listener: p, lampGlow: this.lamp ? this.lamp.glow : 0, lensTurning: !! this.lamp && this.lamp.speed > 0.2,
 				indoor, inLantern, onWalkway, windGust: this.audio._gust ? this.audio._gust.v : 0.5, wind: G.windSpeed.value,
