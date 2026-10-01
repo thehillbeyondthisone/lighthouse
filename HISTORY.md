@@ -31,6 +31,11 @@ entries first.
                    --adapt --params="setting=flannan&lite" --w=640 --h=360 --frames=24
   ```
 
+## 2026-10-01: quickstart.bat
+
+- Added `quickstart.bat` (Windows): checks for Node, runs `npm install` if needed, `npm run build`, then opens
+  http://127.0.0.1:5189 and starts the dev server. Verified `npm install && npm run build` succeed on Linux.
+
 ## 2026-09-29 (later): Eilean Mòr, the light station and the far shore
 
 The user asked for "the lighthouse station and distant other side you can only look across to, and only
